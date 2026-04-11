@@ -50,10 +50,10 @@ input {
 
 button {
   width: 100%;
-  margin-top: 10px;
-  padding: 12px;
+  margin-top: 6px;
+  padding: 10px;
   border: none;
-  border-radius: 12px;
+  border-radius: 10px;
   font-weight: bold;
   cursor: pointer;
 }
@@ -81,7 +81,7 @@ button {
 
 <div id="userBox"></div>
 
-<!-- APP (HIDDEN IF NOT LOGGED IN) -->
+<!-- APP -->
 <div id="appBox" style="display:none">
 
 <input id="name" placeholder="שם מלא">
@@ -105,6 +105,7 @@ const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 const TIMES = ["08:00", "10:00", "18:00"];
 
 let selected = [];
+
 
 // =========================
 // LOGIN
@@ -183,7 +184,7 @@ function buildDays() {
 
       ${TIMES.map(t => `
         <div class="slot">
-          <button onclick="selectSlot('${date}','${t}', this)">
+          <button type="button" onclick="selectSlot('${date}','${t}', this)">
             🕒 ${t}
           </button>
 
@@ -198,7 +199,7 @@ function buildDays() {
 
 
 // =========================
-// SELECT SLOT
+// SELECT SLOT (FIXED)
 // =========================
 function selectSlot(date, time, el) {
   const key = `${date}|${time}`;
@@ -210,11 +211,13 @@ function selectSlot(date, time, el) {
     selected.push(key);
     el.style.background = "#22c55e";
   }
+
+  console.log("SELECTED:", selected);
 }
 
 
 // =========================
-// LOAD DATA (USERS + COUNT)
+// LOAD DATA
 // =========================
 async function load() {
   const { data, error } = await db.functions.invoke("get-registrations");
@@ -256,14 +259,19 @@ async function load() {
 
 
 // =========================
-// SUBMIT
+// SUBMIT (FIXED)
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
   const { data: { user } } = await db.auth.getUser();
 
   if (!user) return alert("יש להתחבר");
-  if (!name || selected.length === 0) return alert("בחר שעות");
+  if (!name) return alert("הכנס שם");
+
+  if (selected.length === 0) {
+    console.log("NO SELECTION", selected);
+    return alert("בחר לפחות שעה אחת");
+  }
 
   const { error } = await db.functions.invoke("create-registration", {
     body: {
@@ -285,9 +293,7 @@ async function submitForm() {
 }
 
 
-// =========================
 // INIT
-// =========================
 buildDays();
 updateAuthUI();
 
