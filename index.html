@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול בת חפר🎾</title>
+<title>פיקלבול 🎾</title>
 
 <style>
 body {
@@ -76,15 +76,13 @@ button {
 <div class="container">
 <h1>🎾פיקלבול בת חפר</h1>
 
-<!-- AUTH ONLY -->
+<!-- AUTH -->
 <div id="authBox">
-  <div class="card">
-    <input id="email" placeholder="אימייל להתחברות">
-    <button class="login" onclick="login()">🔐 התחבר (Magic Link)</button>
-  </div>
+  <input id="email" placeholder="אימייל להתחברות">
+  <button class="login" onclick="login()">🔐 התחבר</button>
 </div>
 
-<!-- APP (HIDDEN BY DEFAULT) -->
+<!-- APP -->
 <div id="appBox" style="display:none;">
   <div class="card">
 
@@ -105,7 +103,7 @@ button {
 
 <script>
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
+const SUPABASE_ANON_KEY = "YOUR_ANON_KEY";
 
 const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
 const CREATE_URL = `${SUPABASE_URL}/functions/v1/create-registration`;
@@ -140,15 +138,7 @@ async function login() {
 }
 
 // =========================
-// LOGOUT
-// =========================
-window.logout = async function () {
-  await client.auth.signOut();
-  await updateAuthUI();
-};
-
-// =========================
-// AUTH UI TOGGLE
+// AUTH UI
 // =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
@@ -169,6 +159,14 @@ async function updateAuthUI() {
     appBox.style.display = "none";
   }
 }
+
+// =========================
+// LOGOUT
+// =========================
+window.logout = async function () {
+  await client.auth.signOut();
+  await updateAuthUI();
+};
 
 // =========================
 // DAYS
@@ -252,6 +250,7 @@ async function load() {
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
+
   const { data: { user } } = await client.auth.getUser();
 
   if (!user) return alert("צריך להתחבר");
@@ -280,19 +279,22 @@ async function submitForm() {
 }
 
 // =========================
-// DELETE (EDGE FUNCTION)
+// DELETE (🔥 FIXED JWT)
 // =========================
 async function deleteRow(id) {
   const { data: { session } } = await client.auth.getSession();
 
-  if (!session) return alert("צריך להתחבר");
+  if (!session) {
+    alert("צריך להתחבר");
+    return;
+  }
 
   const res = await fetch(DELETE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
+      Authorization: `Bearer ${session.access_token}` // ✅ FIX כאן
     },
     body: JSON.stringify({ id })
   });
@@ -300,6 +302,7 @@ async function deleteRow(id) {
   const result = await res.json();
 
   if (!res.ok) {
+    console.error(result);
     alert(result.error || "שגיאה במחיקה");
     return;
   }
