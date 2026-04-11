@@ -31,6 +31,13 @@ input, select {
   margin-bottom: 10px;
 }
 
+.slot-box {
+  background: #0f172a;
+  margin-top: 8px;
+  padding: 10px;
+  border-radius: 10px;
+}
+
 button {
   width: 100%;
   margin-top: 10px;
@@ -60,7 +67,7 @@ button {
 
 <div id="userBox"></div>
 
-<!-- APP (HIDDEN IF NOT LOGGED IN) -->
+<!-- APP -->
 <div id="appBox" style="display:none">
 
 <input id="name" placeholder="שם מלא">
@@ -79,9 +86,7 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const CREATE_URL = `${SUPABASE_URL}/functions/v1/create-registration`;
-
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const TIMES = ["08:00", "10:00", "18:00"];
 
@@ -95,36 +100,30 @@ async function login() {
 
   if (!email) return alert("הכנס אימייל");
 
-  const { error } = await client.auth.signInWithOtp({
+  const { error } = await supabase.auth.signInWithOtp({
     email,
     options: {
       emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
     }
   });
 
-  if (error) {
-    console.error(error);
-    return alert("שגיאה");
-  }
-
+  if (error) return alert("שגיאה");
   alert("נשלח מייל 📧");
 }
 
 // =========================
-// AUTH UI CONTROL
+// AUTH UI
 // =========================
 async function updateAuthUI() {
-  const { data: { user } } = await client.auth.getUser();
+  const { data: { user } } = await supabase.auth.getUser();
 
   const appBox = document.getElementById("appBox");
-  const emailInput = document.getElementById("email");
-  const loginBtn = document.querySelector(".login");
 
   if (user) {
     appBox.style.display = "block";
 
-    emailInput.style.display = "none";
-    loginBtn.style.display = "none";
+    document.getElementById("email").style.display = "none";
+    document.querySelector(".login").style.display = "none";
 
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
@@ -132,15 +131,15 @@ async function updateAuthUI() {
   } else {
     appBox.style.display = "none";
 
-    emailInput.style.display = "block";
-    loginBtn.style.display = "block";
+    document.getElementById("email").style.display = "block";
+    document.querySelector(".login").style.display = "block";
 
     document.getElementById("userBox").innerHTML = "";
   }
 }
 
 // =========================
-// DAYS + DROPDOWN
+// BUILD DAYS
 // =========================
 function buildDays() {
   const container = document.getElementById("days");
@@ -155,16 +154,18 @@ function buildDays() {
     const div = document.createElement("div");
     div.className = "day";
 
-    const options = TIMES.map(t =>
-      `<option value="${date}|${t}">${t}</option>`
-    ).join("");
-
     div.innerHTML = `
       <b>${date}</b>
-      <select onchange="selectSlot(this)">
-        <option value="">בחר שעה</option>
-        ${options}
-      </select>
+
+      ${TIMES.map(t => `
+        <div class="slot-box">
+          <button onclick="selectSlot('${date}','${t}', this)">
+            🕒 ${t}
+          </button>
+
+          <div id="list-${date}-${t}" style="font-size:12px;margin-top:5px"></div>
+        </div>
+      `).join("")}
     `;
 
     container.appendChild(div);
@@ -174,58 +175,97 @@ function buildDays() {
 // =========================
 // SELECT SLOT
 // =========================
-function selectSlot(el) {
-  if (!el.value) return;
+function selectSlot(date, time, el) {
+  const key = `${date}|${time}`;
 
-  if (!selected.includes(el.value)) {
-    selected.push(el.value);
+  if (selected.includes(key)) {
+    selected = selected.filter(x => x !== key);
+    el.style.background = "#1e293b";
+  } else {
+    selected.push(key);
+    el.style.background = "#22c55e";
   }
-
-  console.log("selected:", selected);
 }
 
 // =========================
-// SUBMIT
+// LOAD DATA (players + count)
+// =========================
+async function load() {
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY
+    }
+  });
+
+  const data = await res.json();
+
+  const grouped = {};
+
+  data.forEach(r => {
+    const key = `${r.date}|${r.time}`;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(r.name);
+  });
+
+  for (let i = 1; i <= 7; i++) {
+    let d = new Date();
+    d.setDate(d.getDate() + i);
+
+    let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString().split("T")[0];
+
+    TIMES.forEach(time => {
+      const key = `${date}|${time}`;
+      const users = grouped[key] || [];
+
+      const el = document.getElementById(`list-${date}-${time}`);
+      if (!el) return;
+
+      el.innerHTML = `
+        👥 ${users.length} שחקנים<br>
+        ${users.length ? users.map(u => `• ${u}`).join("<br>") : "אין נרשמים"}
+      `;
+    });
+  }
+}
+
+// =========================
+// SUBMIT (FIXED INVOKE)
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
-  const { data: { session } } = await client.auth.getSession();
+  const { data: { user } } = await supabase.auth.getUser();
 
-  if (!session) return alert("יש להתחבר");
-  if (!name || selected.length === 0) return alert("בחר שעה");
+  if (!user) return alert("יש להתחבר");
+  if (!name || selected.length === 0) return alert("בחר שעות");
 
-  const res = await fetch(CREATE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({
+  const { data, error } = await supabase.functions.invoke("create-registration", {
+    body: {
       name,
       slots: selected
-    })
+    }
   });
 
-  const data = await res.json().catch(() => ({}));
-
-  if (!res.ok) {
-    console.error(data);
+  if (error) {
+    console.error(error);
     return alert("שגיאה בהרשמה");
   }
 
   selected = [];
-  document.querySelectorAll("select").forEach(s => s.value = "");
+  document.querySelectorAll("button").forEach(b => {
+    if (b.onclick) b.style.background = "#1e293b";
+  });
 
   alert("נרשמת בהצלחה 🎾");
+
+  load();
 }
 
-// =========================
 // INIT
-// =========================
 buildDays();
 updateAuthUI();
-client.auth.onAuthStateChange(() => updateAuthUI());
+load();
+supabase.auth.onAuthStateChange(() => updateAuthUI());
 </script>
 
 </body>
