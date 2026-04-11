@@ -173,7 +173,7 @@ async function load() {
 
   data.forEach(r => {
     if (!grouped[r.date]) grouped[r.date] = [];
-    grouped[r.date].push(r.name);
+    grouped[r.date].push(r);
   });
 
   for (let date in dayMap) {
@@ -181,7 +181,15 @@ async function load() {
     let list = grouped[date] || [];
 
     el.querySelector(".count").innerText = list.length + " שחקנים";
-    el.querySelector(".players").innerText = list.join(", ");
+    
+    let playersHtml = list.map(p => 
+      `<div style="display: flex; justify-content: space-between; align-items: center; padding: 5px 0;">
+        <span>${p.name}</span>
+        <button class="deleteBtn" onclick="deleteRow(${p.id})" style="padding: 4px 8px; font-size: 12px; background: #ef4444; border: none; border-radius: 4px; color: white; cursor: pointer;">מחק</button>
+      </div>`
+    ).join("");
+    
+    el.querySelector(".players").innerHTML = playersHtml;
   }
 }
 
@@ -211,7 +219,7 @@ async function submitForm() {
   await client.from("registrations").insert(inserts);
 
   document.getElementById("msg").style.display = "block";
-  load();
+  await load();
 }
 
 // ביטול הרשמה
@@ -235,7 +243,20 @@ async function cancel() {
     .eq("user_id", user.id);
 
   alert("בוטל בהצלחה 🎾");
-  load();
+  await load();
+}
+
+// מחיקת שורה בודדת
+async function deleteRow(id) {
+  await fetch(`${SUPABASE_URL}/delete-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({ id })
+  });
+
+  load(); // רענון UI
 }
 
 // התחלה
