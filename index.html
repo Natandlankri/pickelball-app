@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול 🎾</title>
+<title>פיקלבול בת חפר 🎾</title>
 
 <style>
 body {
@@ -43,6 +43,11 @@ input {
   border-radius: 8px;
 }
 
+.players {
+  font-size: 12px;
+  margin-top: 5px;
+}
+
 button {
   width: 100%;
   margin-top: 10px;
@@ -64,18 +69,28 @@ button {
 
 <h1>🎾 פיקלבול בת חפר</h1>
 
+<!-- LOGIN -->
 <input id="email" placeholder="אימייל">
 <button class="login" onclick="login()">🔐 התחבר</button>
+
+<div id="loginMessage" style="text-align:center;margin-top:10px;">
+  🔐 התחבר כדי לראות זמני משחק
+</div>
 
 <hr>
 
 <div id="userBox"></div>
+
+<!-- APP (HIDDEN IF NOT LOGGED IN) -->
+<div id="appBox" style="display:none">
 
 <input id="name" placeholder="שם מלא">
 
 <div class="days" id="days"></div>
 
 <button class="primary" onclick="submitForm()">הרשמה</button>
+
+</div>
 
 </div>
 
@@ -87,14 +102,9 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
-
 const TIMES = ["08:00", "10:00", "18:00"];
 
 let selected = [];
-
-let dayMap = {};
-
 
 // =========================
 // LOGIN
@@ -121,9 +131,34 @@ async function login() {
 async function updateAuthUI() {
   const { data: { user } } = await db.auth.getUser();
 
-  document.getElementById("userBox").innerHTML = user
-    ? `מחובר כ: <b>${user.email}</b>`
-    : "";
+  const appBox = document.getElementById("appBox");
+  const loginMsg = document.getElementById("loginMessage");
+
+  if (user) {
+    appBox.style.display = "block";
+    loginMsg.style.display = "none";
+
+    document.getElementById("email").style.display = "none";
+    document.querySelector(".login").style.display = "none";
+
+    document.getElementById("userBox").innerHTML = `
+      מחובר כ: <b>${user.email}</b>
+      <button onclick="logout()">יציאה</button>
+    `;
+  } else {
+    appBox.style.display = "none";
+    loginMsg.style.display = "block";
+
+    document.getElementById("email").style.display = "block";
+    document.querySelector(".login").style.display = "block";
+
+    document.getElementById("userBox").innerHTML = "";
+  }
+}
+
+async function logout() {
+  await db.auth.signOut();
+  updateAuthUI();
 }
 
 
@@ -152,13 +187,12 @@ function buildDays() {
             🕒 ${t}
           </button>
 
-          <div id="list-${date}-${t}" style="font-size:12px;margin-top:5px"></div>
+          <div id="list-${date}-${t}" class="players"></div>
         </div>
       `).join("")}
     `;
 
     container.appendChild(div);
-    dayMap[date] = true;
   }
 }
 
@@ -180,14 +214,15 @@ function selectSlot(date, time, el) {
 
 
 // =========================
-// LOAD DATA
+// LOAD DATA (USERS + COUNT)
 // =========================
 async function load() {
-  const res = await fetch(GET_URL, {
-    headers: { apikey: SUPABASE_ANON_KEY }
-  });
+  const { data, error } = await db.functions.invoke("get-registrations");
 
-  const data = await res.json();
+  if (error) {
+    console.error(error);
+    return;
+  }
 
   const grouped = {};
 
@@ -209,19 +244,19 @@ async function load() {
       const users = grouped[key] || [];
 
       const el = document.getElementById(`list-${date}-${time}`);
-      if (el) {
-        el.innerHTML = `
-          👥 ${users.length} שחקנים<br>
-          ${users.length ? users.map(u => `• ${u}`).join("<br>") : "אין נרשמים"}
-        `;
-      }
+      if (!el) return;
+
+      el.innerHTML = `
+        👥 ${users.length} שחקנים<br>
+        ${users.length ? users.map(u => `• ${u}`).join("<br>") : "אין נרשמים"}
+      `;
     });
   }
 }
 
 
 // =========================
-// SUBMIT (EDGE SAFE)
+// SUBMIT
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
@@ -250,11 +285,18 @@ async function submitForm() {
 }
 
 
+// =========================
 // INIT
+// =========================
 buildDays();
-load();
 updateAuthUI();
-db.auth.onAuthStateChange(() => updateAuthUI());
+
+db.auth.onAuthStateChange(async () => {
+  await updateAuthUI();
+
+  const { data: { user } } = await db.auth.getUser();
+  if (user) load();
+});
 </script>
 
 </body>
