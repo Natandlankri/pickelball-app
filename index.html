@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול 🎾</title>
+<title>פיקלבול בת חפר 🎾</title>
 
 <style>
 body {
@@ -60,6 +60,7 @@ button {
 
 .primary { background: #38bdf8; }
 .login { background: #6366f1; color: white; }
+
 .delete-btn {
   background: #ef4444;
   color: white;
@@ -73,7 +74,7 @@ button {
 <body dir="rtl">
 
 <div class="container">
-<h1>🎾 פיקלבול</h1>
+<h1>🎾פיקלבול בת חפר</h1>
 
 <div class="card">
 
@@ -134,16 +135,11 @@ async function login() {
 }
 
 // =========================
-// AUTH LOGOUT (FIXED)
+// AUTH LOGOUT
 // =========================
 window.logout = async function () {
-  try {
-    await client.auth.signOut();
-    location.reload(); // הכי יציב ונקי
-  } catch (err) {
-    console.error("Logout error:", err);
-    alert("שגיאה ביציאה");
-  }
+  await client.auth.signOut();
+  location.reload();
 };
 
 // =========================
@@ -214,7 +210,7 @@ function buildDays() {
 }
 
 // =========================
-// LOAD DATA
+// LOAD
 // =========================
 async function load() {
   const res = await fetch(GET_URL, {
@@ -254,10 +250,10 @@ async function submitForm() {
   const name = document.getElementById("name").value.trim();
   const { data: { user } } = await client.auth.getUser();
 
-  if (!user) return alert("יש להתחבר קודם");
+  if (!user) return alert("צריך להתחבר");
   if (!name || selected.length === 0) return alert("מלא הכל");
 
-  await fetch(CREATE_URL, {
+  const res = await fetch(CREATE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -267,9 +263,15 @@ async function submitForm() {
     body: JSON.stringify({
       name,
       email: user.email,
-      dates: selected
+      dates: selected,
+      user_id: user.id
     })
   });
+
+  if (!res.ok) {
+    alert("שגיאה בהרשמה");
+    return;
+  }
 
   selected = [];
   document.querySelectorAll(".day.selected")
@@ -279,14 +281,12 @@ async function submitForm() {
 }
 
 // =========================
-// DELETE
+// DELETE (EDGE FUNCTION)
 // =========================
 async function deleteRow(id) {
   const { data: { session } } = await client.auth.getSession();
 
   if (!session) return alert("צריך להתחבר");
-
-  if (!confirm("למחוק את ההרשמה שלך?")) return;
 
   const res = await fetch(DELETE_URL, {
     method: "POST",
@@ -300,7 +300,10 @@ async function deleteRow(id) {
 
   const result = await res.json();
 
-  if (!res.ok) return alert(result.error || "שגיאה במחיקה");
+  if (!res.ok) {
+    alert(result.error || "שגיאה במחיקה");
+    return;
+  }
 
   await load();
 }
