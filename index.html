@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול בת חפר 🎾</title>
+<title>פיקלבול בת חפר🎾</title>
 
 <style>
 body {
@@ -76,24 +76,29 @@ button {
 <div class="container">
 <h1>🎾פיקלבול בת חפר</h1>
 
-<div class="card">
-
-<!-- AUTH -->
-<input id="email" placeholder="אימייל להתחברות">
-<button class="login" onclick="login()">🔐 התחבר (Magic Link)</button>
-
-<hr>
-
-<div id="userBox"></div>
-
-<!-- APP -->
-<input id="name" placeholder="שם מלא">
-
-<div class="days" id="days"></div>
-
-<button class="primary" onclick="submitForm()">הרשמה</button>
-
+<!-- AUTH ONLY -->
+<div id="authBox">
+  <div class="card">
+    <input id="email" placeholder="אימייל להתחברות">
+    <button class="login" onclick="login()">🔐 התחבר (Magic Link)</button>
+  </div>
 </div>
+
+<!-- APP (HIDDEN BY DEFAULT) -->
+<div id="appBox" style="display:none;">
+  <div class="card">
+
+    <div id="userBox"></div>
+
+    <input id="name" placeholder="שם מלא">
+
+    <div class="days" id="days"></div>
+
+    <button class="primary" onclick="submitForm()">הרשמה</button>
+
+  </div>
+</div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -112,7 +117,7 @@ let selected = [];
 let dayMap = {};
 
 // =========================
-// AUTH LOGIN
+// LOGIN
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim();
@@ -135,34 +140,33 @@ async function login() {
 }
 
 // =========================
-// AUTH LOGOUT
+// LOGOUT
 // =========================
 window.logout = async function () {
   await client.auth.signOut();
-  location.reload();
+  await updateAuthUI();
 };
 
 // =========================
-// AUTH UI
+// AUTH UI TOGGLE
 // =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
-  const emailInput = document.getElementById("email");
-  const loginBtn = document.querySelector(".login");
+  const authBox = document.getElementById("authBox");
+  const appBox = document.getElementById("appBox");
 
   if (user) {
-    emailInput.style.display = "none";
-    loginBtn.style.display = "none";
+    authBox.style.display = "none";
+    appBox.style.display = "block";
 
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
       <button onclick="logout()">יציאה</button>
     `;
   } else {
-    emailInput.style.display = "block";
-    loginBtn.style.display = "block";
-    document.getElementById("userBox").innerHTML = "";
+    authBox.style.display = "block";
+    appBox.style.display = "none";
   }
 }
 
@@ -253,7 +257,7 @@ async function submitForm() {
   if (!user) return alert("צריך להתחבר");
   if (!name || selected.length === 0) return alert("מלא הכל");
 
-  const res = await fetch(CREATE_URL, {
+  await fetch(CREATE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -267,11 +271,6 @@ async function submitForm() {
       user_id: user.id
     })
   });
-
-  if (!res.ok) {
-    alert("שגיאה בהרשמה");
-    return;
-  }
 
   selected = [];
   document.querySelectorAll(".day.selected")
