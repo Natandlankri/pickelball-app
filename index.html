@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול 🎾</title>
+<title> בת חפר פיקלבול 🎾</title>
 
 <style>
 body {
@@ -77,13 +77,15 @@ button {
 
 <div class="card">
 
-<!-- AUTH -->
+<!-- LOGIN -->
 <input id="email" placeholder="אימייל להתחברות">
 <button class="login" onclick="login()">🔐 התחבר (Magic Link)</button>
 
 <hr>
 
 <!-- APP -->
+<div id="userBox"></div>
+
 <input id="name" placeholder="שם מלא">
 
 <div class="days" id="days"></div>
@@ -97,7 +99,7 @@ button {
 
 <script>
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
+const SUPABASE_ANON_KEY = "YOUR_KEY";
 
 const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
 const CREATE_URL = `${SUPABASE_URL}/functions/v1/create-registration`;
@@ -109,7 +111,7 @@ let selected = [];
 let dayMap = {};
 
 // =========================
-// 🔐 LOGIN (MAGIC LINK)
+// 🔐 LOGIN (MAGIC LINK FIXED)
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim();
@@ -119,7 +121,12 @@ async function login() {
     return;
   }
 
-  const { error } = await client.auth.signInWithOtp({ email });
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
+    }
+  });
 
   if (error) {
     alert("שגיאה בשליחת מייל");
@@ -130,11 +137,31 @@ async function login() {
 }
 
 // =========================
-// 👤 GET USER
+// 👤 USER STATE
 // =========================
 async function getUser() {
   const { data } = await client.auth.getUser();
   return data?.user;
+}
+
+async function showUser() {
+  const user = await getUser();
+  const box = document.getElementById("userBox");
+
+  if (!user) {
+    box.innerHTML = "<p>לא מחובר</p>";
+    return;
+  }
+
+  box.innerHTML = `
+    <p>מחובר כ: <b>${user.email}</b></p>
+    <button onclick="logout()">יציאה</button>
+  `;
+}
+
+async function logout() {
+  await client.auth.signOut();
+  location.reload();
 }
 
 // =========================
@@ -181,7 +208,7 @@ function buildDays() {
 }
 
 // =========================
-// 📥 LOAD DATA
+// 📥 LOAD
 // =========================
 async function load() {
   const res = await fetch(GET_URL, {
@@ -215,11 +242,10 @@ async function load() {
 }
 
 // =========================
-// ➕ SUBMIT (AUTH USER)
+// ➕ SUBMIT (AUTH)
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
-
   const user = await getUser();
 
   if (!user) {
@@ -232,7 +258,7 @@ async function submitForm() {
     return;
   }
 
-  const res = await fetch(CREATE_URL, {
+  await fetch(CREATE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -246,8 +272,6 @@ async function submitForm() {
     })
   });
 
-  await res.json();
-
   selected = [];
   document.querySelectorAll(".day.selected")
     .forEach(d => d.classList.remove("selected"));
@@ -256,7 +280,7 @@ async function submitForm() {
 }
 
 // =========================
-// 🗑 DELETE (AUTH ONLY)
+// 🗑 DELETE (AUTH SECURE)
 // =========================
 async function deleteRow(id) {
   const { data: { session } } = await client.auth.getSession();
@@ -288,9 +312,12 @@ async function deleteRow(id) {
   await load();
 }
 
+// =========================
 // INIT
+// =========================
 buildDays();
 load();
+showUser();
 </script>
 
 </body>
