@@ -3,7 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול 🎾</title>
+
+<title>פיקלבול בת חפר 🎾</title>
 
 <style>
 body {
@@ -60,7 +61,6 @@ button {
 
 .primary { background: #38bdf8; }
 .login { background: #6366f1; color: white; }
-
 .delete-btn {
   background: #ef4444;
   color: white;
@@ -74,28 +74,22 @@ button {
 <body dir="rtl">
 
 <div class="container">
-<h1>🎾פיקלבול בת חפר</h1>
+<h1>🎾 פיקלבול בת חפר</h1>
 
 <!-- AUTH -->
-<div id="authBox">
-  <input id="email" placeholder="אימייל להתחברות">
-  <button class="login" onclick="login()">🔐 התחבר</button>
-</div>
+<input id="email" placeholder="אימייל להתחברות">
+<button class="login" onclick="login()">🔐 התחבר (Magic Link)</button>
+
+<hr>
+
+<div id="userBox"></div>
 
 <!-- APP -->
-<div id="appBox" style="display:none;">
-  <div class="card">
+<input id="name" placeholder="שם מלא">
 
-    <div id="userBox"></div>
+<div class="days" id="days"></div>
 
-    <input id="name" placeholder="שם מלא">
-
-    <div class="days" id="days"></div>
-
-    <button class="primary" onclick="submitForm()">הרשמה</button>
-
-  </div>
-</div>
+<button class="primary" onclick="submitForm()">הרשמה</button>
 
 </div>
 
@@ -143,30 +137,28 @@ async function login() {
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
-  const authBox = document.getElementById("authBox");
-  const appBox = document.getElementById("appBox");
+  const emailInput = document.getElementById("email");
+  const loginBtn = document.querySelector(".login");
 
   if (user) {
-    authBox.style.display = "none";
-    appBox.style.display = "block";
+    emailInput.style.display = "none";
+    loginBtn.style.display = "none";
 
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
       <button onclick="logout()">יציאה</button>
     `;
   } else {
-    authBox.style.display = "block";
-    appBox.style.display = "none";
+    emailInput.style.display = "block";
+    loginBtn.style.display = "block";
+    document.getElementById("userBox").innerHTML = "";
   }
 }
 
-// =========================
-// LOGOUT
-// =========================
-window.logout = async function () {
+async function logout() {
   await client.auth.signOut();
-  await updateAuthUI();
-};
+  updateAuthUI();
+}
 
 // =========================
 // DAYS
@@ -250,26 +242,38 @@ async function load() {
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
+  const { data: { session } } = await client.auth.getSession();
 
-  const { data: { user } } = await client.auth.getUser();
+  if (!session) {
+    alert("יש להתחבר קודם");
+    return;
+  }
 
-  if (!user) return alert("צריך להתחבר");
-  if (!name || selected.length === 0) return alert("מלא הכל");
+  if (!name || selected.length === 0) {
+    alert("מלא הכל");
+    return;
+  }
 
-  await fetch(CREATE_URL, {
+  const res = await fetch(CREATE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`
+      Authorization: `Bearer ${session.access_token}`
     },
     body: JSON.stringify({
       name,
-      email: user.email,
-      dates: selected,
-      user_id: user.id
+      dates: selected
     })
   });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    console.error(data);
+    alert(data.error || "שגיאה בהרשמה");
+    return;
+  }
 
   selected = [];
   document.querySelectorAll(".day.selected")
@@ -279,22 +283,19 @@ async function submitForm() {
 }
 
 // =========================
-// DELETE (🔥 FIXED JWT)
+// DELETE
 // =========================
 async function deleteRow(id) {
   const { data: { session } } = await client.auth.getSession();
 
-  if (!session) {
-    alert("צריך להתחבר");
-    return;
-  }
+  if (!session) return alert("צריך להתחבר");
 
   const res = await fetch(DELETE_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}` // ✅ FIX כאן
+      Authorization: `Bearer ${session.access_token}`
     },
     body: JSON.stringify({ id })
   });
