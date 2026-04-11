@@ -16,7 +16,7 @@ body {
 .container { max-width: 500px; margin: auto; padding: 20px; }
 h1 { text-align: center; }
 
-input {
+input, select {
   width: 100%;
   padding: 12px;
   margin: 8px 0;
@@ -31,20 +31,6 @@ input {
   margin-bottom: 10px;
 }
 
-.slot-btn {
-  margin: 5px;
-  padding: 8px 10px;
-  border-radius: 8px;
-  border: none;
-  cursor: pointer;
-  background: #334155;
-  color: white;
-}
-
-.slot-btn.selected {
-  background: #22c55e;
-}
-
 button {
   width: 100%;
   margin-top: 10px;
@@ -57,13 +43,6 @@ button {
 
 .primary { background: #38bdf8; }
 .login { background: #6366f1; color: white; }
-.delete-btn {
-  background: #ef4444;
-  color: white;
-  border: none;
-  padding: 4px 8px;
-  border-radius: 6px;
-}
 </style>
 </head>
 
@@ -73,6 +52,7 @@ button {
 
 <h1>🎾 פיקלבול בת חפר</h1>
 
+<!-- AUTH -->
 <input id="email" placeholder="אימייל להתחברות">
 <button class="login" onclick="login()">🔐 התחבר</button>
 
@@ -80,11 +60,16 @@ button {
 
 <div id="userBox"></div>
 
+<!-- APP (HIDDEN IF NOT LOGGED IN) -->
+<div id="appBox" style="display:none">
+
 <input id="name" placeholder="שם מלא">
 
 <div id="days"></div>
 
 <button class="primary" onclick="submitForm()">הרשמה</button>
+
+</div>
 
 </div>
 
@@ -95,17 +80,15 @@ const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
 const CREATE_URL = `${SUPABASE_URL}/functions/v1/create-registration`;
-const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
-const DELETE_URL = `${SUPABASE_URL}/functions/v1/delete-registration`;
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let selected = [];
-
 const TIMES = ["08:00", "10:00", "18:00"];
 
+let selected = [];
+
 // =========================
-// AUTH
+// LOGIN
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim();
@@ -119,31 +102,45 @@ async function login() {
     }
   });
 
-  if (error) return alert("שגיאה");
+  if (error) {
+    console.error(error);
+    return alert("שגיאה");
+  }
+
   alert("נשלח מייל 📧");
 }
 
+// =========================
+// AUTH UI CONTROL
+// =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
+  const appBox = document.getElementById("appBox");
+  const emailInput = document.getElementById("email");
+  const loginBtn = document.querySelector(".login");
+
   if (user) {
-    document.getElementById("email").style.display = "none";
-    document.querySelector(".login").style.display = "none";
+    appBox.style.display = "block";
+
+    emailInput.style.display = "none";
+    loginBtn.style.display = "none";
 
     document.getElementById("userBox").innerHTML = `
-      <p>מחובר: <b>${user.email}</b></p>
-      <button onclick="logout()">יציאה</button>
+      <p>מחובר כ: <b>${user.email}</b></p>
     `;
+  } else {
+    appBox.style.display = "none";
+
+    emailInput.style.display = "block";
+    loginBtn.style.display = "block";
+
+    document.getElementById("userBox").innerHTML = "";
   }
 }
 
-async function logout() {
-  await client.auth.signOut();
-  location.reload();
-}
-
 // =========================
-// DAYS + SLOTS
+// DAYS + DROPDOWN
 // =========================
 function buildDays() {
   const container = document.getElementById("days");
@@ -155,34 +152,36 @@ function buildDays() {
     let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
       .toISOString().split("T")[0];
 
-    let div = document.createElement("div");
+    const div = document.createElement("div");
     div.className = "day";
 
-    let slots = TIMES.map(t => `
-      <button class="slot-btn" onclick="toggleSlot('${date}','${t}', this)">
-        ${t}
-      </button>
-    `).join("");
+    const options = TIMES.map(t =>
+      `<option value="${date}|${t}">${t}</option>`
+    ).join("");
 
     div.innerHTML = `
       <b>${date}</b>
-      <div>${slots}</div>
+      <select onchange="selectSlot(this)">
+        <option value="">בחר שעה</option>
+        ${options}
+      </select>
     `;
 
     container.appendChild(div);
   }
 }
 
-function toggleSlot(date, time, el) {
-  const key = `${date}|${time}`;
+// =========================
+// SELECT SLOT
+// =========================
+function selectSlot(el) {
+  if (!el.value) return;
 
-  if (selected.includes(key)) {
-    selected = selected.filter(x => x !== key);
-    el.classList.remove("selected");
-  } else {
-    selected.push(key);
-    el.classList.add("selected");
+  if (!selected.includes(el.value)) {
+    selected.push(el.value);
   }
+
+  console.log("selected:", selected);
 }
 
 // =========================
@@ -193,7 +192,7 @@ async function submitForm() {
   const { data: { session } } = await client.auth.getSession();
 
   if (!session) return alert("יש להתחבר");
-  if (!name || selected.length === 0) return alert("מלא הכל");
+  if (!name || selected.length === 0) return alert("בחר שעה");
 
   const res = await fetch(CREATE_URL, {
     method: "POST",
@@ -212,12 +211,11 @@ async function submitForm() {
 
   if (!res.ok) {
     console.error(data);
-    return alert(data.error || "שגיאה");
+    return alert("שגיאה בהרשמה");
   }
 
   selected = [];
-  document.querySelectorAll(".slot-btn.selected")
-    .forEach(b => b.classList.remove("selected"));
+  document.querySelectorAll("select").forEach(s => s.value = "");
 
   alert("נרשמת בהצלחה 🎾");
 }
