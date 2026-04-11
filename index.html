@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול בת חפר 🎾</title>
+<title>פיקלבול 🎾</title>
 
 <style>
 body {
@@ -16,7 +16,7 @@ body {
 .container { max-width: 500px; margin: auto; padding: 20px; }
 h1 { text-align: center; }
 
-input, select {
+input {
   width: 100%;
   padding: 12px;
   margin: 8px 0;
@@ -24,19 +24,21 @@ input, select {
   border: none;
 }
 
+.days {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
 .day {
   background: #1e293b;
   padding: 12px;
   border-radius: 12px;
-  margin-bottom: 10px;
 }
 
-.slot-box {
-  background: #0f172a;
-  margin-top: 8px;
-  padding: 10px;
-  border-radius: 10px;
-}
+.count { font-size: 12px; opacity: 0.8; margin-top: 4px; }
+
+.players { font-size: 12px; margin-top: 6px; }
 
 button {
   width: 100%;
@@ -50,6 +52,15 @@ button {
 
 .primary { background: #38bdf8; }
 .login { background: #6366f1; color: white; }
+
+.delete-btn {
+  background: #ef4444;
+  color: white;
+  border-radius: 6px;
+  padding: 3px 6px;
+  border: none;
+  cursor: pointer;
+}
 </style>
 </head>
 
@@ -57,9 +68,8 @@ button {
 
 <div class="container">
 
-<h1>🎾 פיקלבול בת חפר</h1>
+<h1>🎾 פיקלבול</h1>
 
-<!-- AUTH -->
 <input id="email" placeholder="אימייל להתחברות">
 <button class="login" onclick="login()">🔐 התחבר</button>
 
@@ -67,16 +77,11 @@ button {
 
 <div id="userBox"></div>
 
-<!-- APP -->
-<div id="appBox" style="display:none">
-
 <input id="name" placeholder="שם מלא">
 
-<div id="days"></div>
+<div class="days" id="days"></div>
 
 <button class="primary" onclick="submitForm()">הרשמה</button>
-
-</div>
 
 </div>
 
@@ -88,16 +93,18 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const TIMES = ["08:00", "10:00", "18:00"];
+const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
 
 let selected = [];
+let dayMap = {};
+const TIMES = ["08:00", "10:00", "18:00"];
+
 
 // =========================
 // LOGIN
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim();
-
   if (!email) return alert("הכנס אימייל");
 
   const { error } = await supabase.auth.signInWithOtp({
@@ -107,9 +114,10 @@ async function login() {
     }
   });
 
-  if (error) return alert("שגיאה");
+  if (error) return alert("שגיאה בשליחה");
   alert("נשלח מייל 📧");
 }
+
 
 // =========================
 // AUTH UI
@@ -117,26 +125,15 @@ async function login() {
 async function updateAuthUI() {
   const { data: { user } } = await supabase.auth.getUser();
 
-  const appBox = document.getElementById("appBox");
-
   if (user) {
-    appBox.style.display = "block";
-
-    document.getElementById("email").style.display = "none";
-    document.querySelector(".login").style.display = "none";
-
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
     `;
   } else {
-    appBox.style.display = "none";
-
-    document.getElementById("email").style.display = "block";
-    document.querySelector(".login").style.display = "block";
-
     document.getElementById("userBox").innerHTML = "";
   }
 }
+
 
 // =========================
 // BUILD DAYS
@@ -158,19 +155,23 @@ function buildDays() {
       <b>${date}</b>
 
       ${TIMES.map(t => `
-        <div class="slot-box">
+        <div style="margin-top:6px;background:#0f172a;padding:8px;border-radius:8px">
           <button onclick="selectSlot('${date}','${t}', this)">
             🕒 ${t}
           </button>
 
-          <div id="list-${date}-${t}" style="font-size:12px;margin-top:5px"></div>
+          <div id="list-${date}-${t}" class="players"></div>
         </div>
       `).join("")}
+
+      <div class="count" id="count-${date}"></div>
     `;
 
     container.appendChild(div);
+    dayMap[date] = div;
   }
 }
+
 
 // =========================
 // SELECT SLOT
@@ -187,11 +188,12 @@ function selectSlot(date, time, el) {
   }
 }
 
+
 // =========================
-// LOAD DATA (players + count)
+// LOAD DATA
 // =========================
 async function load() {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+  const res = await fetch(GET_URL, {
     headers: {
       apikey: SUPABASE_ANON_KEY
     }
@@ -207,27 +209,22 @@ async function load() {
     grouped[key].push(r.name);
   });
 
-  for (let i = 1; i <= 7; i++) {
-    let d = new Date();
-    d.setDate(d.getDate() + i);
-
-    let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-      .toISOString().split("T")[0];
-
+  for (let date in dayMap) {
     TIMES.forEach(time => {
       const key = `${date}|${time}`;
       const users = grouped[key] || [];
 
       const el = document.getElementById(`list-${date}-${time}`);
-      if (!el) return;
-
-      el.innerHTML = `
-        👥 ${users.length} שחקנים<br>
-        ${users.length ? users.map(u => `• ${u}`).join("<br>") : "אין נרשמים"}
-      `;
+      if (el) {
+        el.innerHTML = `
+          👥 ${users.length} שחקנים<br>
+          ${users.length ? users.map(u => `• ${u}`).join("<br>") : "אין נרשמים"}
+        `;
+      }
     });
   }
 }
+
 
 // =========================
 // SUBMIT (FIXED INVOKE)
@@ -239,9 +236,10 @@ async function submitForm() {
   if (!user) return alert("יש להתחבר");
   if (!name || selected.length === 0) return alert("בחר שעות");
 
-  const { data, error } = await supabase.functions.invoke("create-registration", {
+  const { error } = await supabase.functions.invoke("create-registration", {
     body: {
       name,
+      email: user.email,
       slots: selected
     }
   });
@@ -252,19 +250,18 @@ async function submitForm() {
   }
 
   selected = [];
-  document.querySelectorAll("button").forEach(b => {
-    if (b.onclick) b.style.background = "#1e293b";
-  });
+  await load();
 
   alert("נרשמת בהצלחה 🎾");
-
-  load();
 }
 
+
+// =========================
 // INIT
+// =========================
 buildDays();
-updateAuthUI();
 load();
+updateAuthUI();
 supabase.auth.onAuthStateChange(() => updateAuthUI());
 </script>
 
