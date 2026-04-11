@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>פיקלבול 🎾</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  margin: 0;
+}
+
+.container {
+  max-width: 500px;
+  margin: auto;
+  padding: 20px;
+}
+
+h1 {
+  text-align: center;
+}
+
+.card {
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 16px;
+}
+
+input {
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: none;
+}
+
+.days {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+
+.day {
+  background: #334155;
+  padding: 12px;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.day.selected {
+  background: #22c55e;
+}
+
+.count {
+  font-size: 12px;
+  opacity: 0.8;
+}
+
+.players {
+  font-size: 12px;
+  margin-top: 5px;
+  opacity: 0.9;
+}
+
+button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.primary {
+  background: #38bdf8;
+}
+
+.danger {
+  background: #ef4444;
+  color: white;
+}
+
+.success {
+  color: #4ade80;
+  margin-top: 10px;
+  display: none;
+}
+</style>
+</head>
+
+<body dir="rtl">
+
+<div class="container">
+<h1>🎾 פיקלבול</h1>
+
+<div class="card">
+<input id="name" placeholder="שם מלא">
+<input id="email" placeholder="אימייל">
+
+<div class="days" id="days"></div>
+
+<button class="primary" onclick="submitForm()">הרשמה</button>
+<button class="danger" onclick="cancel()">בטל הרשמה</button>
+
+<div class="success" id="msg">נשמר בהצלחה 🎉</div>
+</div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+
+<script>
+
+//
+// 🟢 משתנים מסודרים (כאן אתה שם את החיבור שלך)
+//
+const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
+const SUPABASE_ANON_KEY = "sb_publishable_kMnhBWgczRYa7tFNlKovCg_zmcTVLIN";
+
+const client = supabase.createClient(
+  SUPABASE_URL,
+  SUPABASE_ANON_KEY
+);
+
+let selected = [];
+let dayMap = {};
+
+// יצירת ימים
+for (let i = 1; i <= 7; i++) {
+  let d = new Date();
+  d.setDate(d.getDate() + i);
+
+  let iso = d.toISOString().split("T")[0];
+
+  let label = d.toLocaleDateString("he-IL", {
+    weekday: "short",
+    day: "2-digit",
+    month: "2-digit"
+  });
+
+  let div = document.createElement("div");
+  div.className = "day";
+  div.innerHTML = `
+    <div>${label}</div>
+    <div class="count">טוען...</div>
+    <div class="players"></div>
+  `;
+
+  div.onclick = () => {
+    div.classList.toggle("selected");
+
+    if (selected.includes(iso)) {
+      selected = selected.filter(x => x !== iso);
+    } else {
+      selected.push(iso);
+    }
+  };
+
+  dayMap[iso] = div;
+  document.getElementById("days").appendChild(div);
+}
+
+// טעינת נתונים
+async function load() {
+  const { data } = await client
+    .from("registrations")
+    .select("*");
+
+  let grouped = {};
+
+  data.forEach(r => {
+    if (!grouped[r.date]) grouped[r.date] = [];
+    grouped[r.date].push(r.name);
+  });
+
+  for (let date in dayMap) {
+    let el = dayMap[date];
+    let list = grouped[date] || [];
+
+    el.querySelector(".count").innerText = list.length + " שחקנים";
+    el.querySelector(".players").innerText = list.join(", ");
+  }
+}
+
+// הרשמה
+async function submitForm() {
+  const name = document.getElementById("name").value;
+  const email = document.getElementById("email").value;
+
+  if (!name || !email || selected.length === 0) {
+    alert("מלא הכל");
+    return;
+  }
+
+  const { data: user } = await client
+    .from("users")
+    .upsert({ name, email })
+    .select()
+    .single();
+
+  const inserts = selected.map(date => ({
+    user_id: user.id,
+    name,
+    email,
+    date
+  }));
+
+  await client.from("registrations").insert(inserts);
+
+  document.getElementById("msg").style.display = "block";
+  load();
+}
+
+// ביטול הרשמה
+async function cancel() {
+  const email = document.getElementById("email").value;
+
+  const { data: user } = await client
+    .from("users")
+    .select("id")
+    .eq("email", email)
+    .single();
+
+  if (!user) {
+    alert("לא נמצא משתמש");
+    return;
+  }
+
+  await client
+    .from("registrations")
+    .delete()
+    .eq("user_id", user.id);
+
+  alert("בוטל בהצלחה 🎾");
+  load();
+}
+
+// התחלה
+load();
+
+</script>
+
+</body>
+</html>
