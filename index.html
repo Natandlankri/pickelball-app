@@ -111,7 +111,7 @@ let selected = [];
 let dayMap = {};
 
 // =========================
-// AUTH
+// AUTH LOGIN
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim();
@@ -125,16 +125,30 @@ async function login() {
     }
   });
 
-  if (error) return alert("שגיאה בשליחת מייל");
+  if (error) {
+    console.error(error);
+    return alert("שגיאה בשליחת מייל");
+  }
 
   alert("נשלח מייל 📧");
 }
 
-async function logout() {
-  await client.auth.signOut();
-  updateAuthUI();
-}
+// =========================
+// AUTH LOGOUT (FIXED)
+// =========================
+window.logout = async function () {
+  try {
+    await client.auth.signOut();
+    location.reload(); // הכי יציב ונקי
+  } catch (err) {
+    console.error("Logout error:", err);
+    alert("שגיאה ביציאה");
+  }
+};
 
+// =========================
+// AUTH UI
+// =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
@@ -200,7 +214,7 @@ function buildDays() {
 }
 
 // =========================
-// LOAD
+// LOAD DATA
 // =========================
 async function load() {
   const res = await fetch(GET_URL, {
@@ -265,7 +279,7 @@ async function submitForm() {
 }
 
 // =========================
-// DELETE (SECURE)
+// DELETE
 // =========================
 async function deleteRow(id) {
   const { data: { session } } = await client.auth.getSession();
@@ -291,7 +305,9 @@ async function deleteRow(id) {
   await load();
 }
 
+// =========================
 // INIT
+// =========================
 buildDays();
 load();
 updateAuthUI();
