@@ -36,9 +36,12 @@ input {
   border-radius: 12px;
 }
 
-.count { font-size: 12px; opacity: 0.8; margin-top: 4px; }
-
-.players { font-size: 12px; margin-top: 6px; }
+.slot {
+  background: #0f172a;
+  margin-top: 8px;
+  padding: 8px;
+  border-radius: 8px;
+}
 
 button {
   width: 100%;
@@ -52,15 +55,6 @@ button {
 
 .primary { background: #38bdf8; }
 .login { background: #6366f1; color: white; }
-
-.delete-btn {
-  background: #ef4444;
-  color: white;
-  border-radius: 6px;
-  padding: 3px 6px;
-  border: none;
-  cursor: pointer;
-}
 </style>
 </head>
 
@@ -68,9 +62,9 @@ button {
 
 <div class="container">
 
-<h1>🎾 פיקלבול</h1>
+<h1>🎾 פיקלבול בת חפר</h1>
 
-<input id="email" placeholder="אימייל להתחברות">
+<input id="email" placeholder="אימייל">
 <button class="login" onclick="login()">🔐 התחבר</button>
 
 <hr>
@@ -91,13 +85,15 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
 
-let selected = [];
-let dayMap = {};
 const TIMES = ["08:00", "10:00", "18:00"];
+
+let selected = [];
+
+let dayMap = {};
 
 
 // =========================
@@ -107,14 +103,14 @@ async function login() {
   const email = document.getElementById("email").value.trim();
   if (!email) return alert("הכנס אימייל");
 
-  const { error } = await supabase.auth.signInWithOtp({
+  const { error } = await db.auth.signInWithOtp({
     email,
     options: {
       emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
     }
   });
 
-  if (error) return alert("שגיאה בשליחה");
+  if (error) return alert("שגיאה");
   alert("נשלח מייל 📧");
 }
 
@@ -123,15 +119,11 @@ async function login() {
 // AUTH UI
 // =========================
 async function updateAuthUI() {
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await db.auth.getUser();
 
-  if (user) {
-    document.getElementById("userBox").innerHTML = `
-      <p>מחובר כ: <b>${user.email}</b></p>
-    `;
-  } else {
-    document.getElementById("userBox").innerHTML = "";
-  }
+  document.getElementById("userBox").innerHTML = user
+    ? `מחובר כ: <b>${user.email}</b>`
+    : "";
 }
 
 
@@ -155,20 +147,18 @@ function buildDays() {
       <b>${date}</b>
 
       ${TIMES.map(t => `
-        <div style="margin-top:6px;background:#0f172a;padding:8px;border-radius:8px">
+        <div class="slot">
           <button onclick="selectSlot('${date}','${t}', this)">
             🕒 ${t}
           </button>
 
-          <div id="list-${date}-${t}" class="players"></div>
+          <div id="list-${date}-${t}" style="font-size:12px;margin-top:5px"></div>
         </div>
       `).join("")}
-
-      <div class="count" id="count-${date}"></div>
     `;
 
     container.appendChild(div);
-    dayMap[date] = div;
+    dayMap[date] = true;
   }
 }
 
@@ -194,9 +184,7 @@ function selectSlot(date, time, el) {
 // =========================
 async function load() {
   const res = await fetch(GET_URL, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY
-    }
+    headers: { apikey: SUPABASE_ANON_KEY }
   });
 
   const data = await res.json();
@@ -209,7 +197,13 @@ async function load() {
     grouped[key].push(r.name);
   });
 
-  for (let date in dayMap) {
+  for (let i = 1; i <= 7; i++) {
+    let d = new Date();
+    d.setDate(d.getDate() + i);
+
+    let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString().split("T")[0];
+
     TIMES.forEach(time => {
       const key = `${date}|${time}`;
       const users = grouped[key] || [];
@@ -227,16 +221,16 @@ async function load() {
 
 
 // =========================
-// SUBMIT (FIXED INVOKE)
+// SUBMIT (EDGE SAFE)
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { data: { user } } = await db.auth.getUser();
 
   if (!user) return alert("יש להתחבר");
   if (!name || selected.length === 0) return alert("בחר שעות");
 
-  const { error } = await supabase.functions.invoke("create-registration", {
+  const { error } = await db.functions.invoke("create-registration", {
     body: {
       name,
       email: user.email,
@@ -256,13 +250,11 @@ async function submitForm() {
 }
 
 
-// =========================
 // INIT
-// =========================
 buildDays();
 load();
 updateAuthUI();
-supabase.auth.onAuthStateChange(() => updateAuthUI());
+db.auth.onAuthStateChange(() => updateAuthUI());
 </script>
 
 </body>
