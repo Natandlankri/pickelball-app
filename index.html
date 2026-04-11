@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title> בת חפר פיקלבול 🎾</title>
+<title>פיקלבול 🎾</title>
 
 <style>
 body {
@@ -77,15 +77,15 @@ button {
 
 <div class="card">
 
-<!-- LOGIN -->
+<!-- AUTH -->
 <input id="email" placeholder="אימייל להתחברות">
 <button class="login" onclick="login()">🔐 התחבר (Magic Link)</button>
 
 <hr>
 
-<!-- APP -->
 <div id="userBox"></div>
 
+<!-- APP -->
 <input id="name" placeholder="שם מלא">
 
 <div class="days" id="days"></div>
@@ -111,15 +111,12 @@ let selected = [];
 let dayMap = {};
 
 // =========================
-// 🔐 LOGIN (MAGIC LINK FIXED)
+// AUTH
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim();
 
-  if (!email) {
-    alert("הכנס אימייל");
-    return;
-  }
+  if (!email) return alert("הכנס אימייל");
 
   const { error } = await client.auth.signInWithOtp({
     email,
@@ -128,44 +125,39 @@ async function login() {
     }
   });
 
-  if (error) {
-    alert("שגיאה בשליחת מייל");
-    return;
-  }
+  if (error) return alert("שגיאה בשליחת מייל");
 
-  alert("נשלח לך מייל התחברות 📧");
-}
-
-// =========================
-// 👤 USER STATE
-// =========================
-async function getUser() {
-  const { data } = await client.auth.getUser();
-  return data?.user;
-}
-
-async function showUser() {
-  const user = await getUser();
-  const box = document.getElementById("userBox");
-
-  if (!user) {
-    box.innerHTML = "<p>לא מחובר</p>";
-    return;
-  }
-
-  box.innerHTML = `
-    <p>מחובר כ: <b>${user.email}</b></p>
-    <button onclick="logout()">יציאה</button>
-  `;
+  alert("נשלח מייל 📧");
 }
 
 async function logout() {
   await client.auth.signOut();
-  location.reload();
+  updateAuthUI();
+}
+
+async function updateAuthUI() {
+  const { data: { user } } = await client.auth.getUser();
+
+  const emailInput = document.getElementById("email");
+  const loginBtn = document.querySelector(".login");
+
+  if (user) {
+    emailInput.style.display = "none";
+    loginBtn.style.display = "none";
+
+    document.getElementById("userBox").innerHTML = `
+      <p>מחובר כ: <b>${user.email}</b></p>
+      <button onclick="logout()">יציאה</button>
+    `;
+  } else {
+    emailInput.style.display = "block";
+    loginBtn.style.display = "block";
+    document.getElementById("userBox").innerHTML = "";
+  }
 }
 
 // =========================
-// 📅 BUILD DAYS
+// DAYS
 // =========================
 function buildDays() {
   const container = document.getElementById("days");
@@ -208,7 +200,7 @@ function buildDays() {
 }
 
 // =========================
-// 📥 LOAD
+// LOAD
 // =========================
 async function load() {
   const res = await fetch(GET_URL, {
@@ -242,21 +234,14 @@ async function load() {
 }
 
 // =========================
-// ➕ SUBMIT (AUTH)
+// SUBMIT
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
-  const user = await getUser();
+  const { data: { user } } = await client.auth.getUser();
 
-  if (!user) {
-    alert("יש להתחבר קודם");
-    return;
-  }
-
-  if (!name || selected.length === 0) {
-    alert("מלא הכל");
-    return;
-  }
+  if (!user) return alert("יש להתחבר קודם");
+  if (!name || selected.length === 0) return alert("מלא הכל");
 
   await fetch(CREATE_URL, {
     method: "POST",
@@ -280,15 +265,12 @@ async function submitForm() {
 }
 
 // =========================
-// 🗑 DELETE (AUTH SECURE)
+// DELETE (SECURE)
 // =========================
 async function deleteRow(id) {
   const { data: { session } } = await client.auth.getSession();
 
-  if (!session) {
-    alert("צריך להתחבר");
-    return;
-  }
+  if (!session) return alert("צריך להתחבר");
 
   if (!confirm("למחוק את ההרשמה שלך?")) return;
 
@@ -304,20 +286,16 @@ async function deleteRow(id) {
 
   const result = await res.json();
 
-  if (!res.ok) {
-    alert(result.error || "שגיאה במחיקה");
-    return;
-  }
+  if (!res.ok) return alert(result.error || "שגיאה במחיקה");
 
   await load();
 }
 
-// =========================
 // INIT
-// =========================
 buildDays();
 load();
-showUser();
+updateAuthUI();
+client.auth.onAuthStateChange(() => updateAuthUI());
 </script>
 
 </body>
