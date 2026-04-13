@@ -114,9 +114,6 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selected = [];
 
-// =========================
-// 🔐 FLOW V2 LOGIN (NO JWT)
-// =========================
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
   const loader = document.getElementById("loader");
@@ -132,12 +129,13 @@ async function login() {
   }
 
   try {
-    // 1. בדיקת whitelist (ללא JWT)
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
+const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`, // 🔥 פותר CORS/Edge issues
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ email }),
     });
