@@ -59,17 +59,17 @@ button {
   background: #22c55e;
 }
 
-#userBox {
-  margin-top: 10px;
-  font-size: 14px;
-  opacity: 0.9;
-}
-
 #loader {
   display: none;
   font-size: 12px;
   opacity: 0.7;
   margin-top: 5px;
+}
+
+#userBox {
+  margin-top: 10px;
+  font-size: 14px;
+  opacity: 0.9;
 }
 </style>
 </head>
@@ -81,7 +81,7 @@ button {
   <h1>🎾 פיקלבול</h1>
 
   <!-- AUTH -->
-  <div id="authBox" class="card">
+  <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
     <div id="loader">בודק הרשאה...</div>
@@ -115,10 +115,9 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let selected = [];
 
 // =========================
-// 🔐 CHECK USER (WHITELIST)
+// 🔐 FLOW V2 LOGIN (NO JWT)
 // =========================
 async function login() {
-  console.log("🔥 CHECK-USER HIT NEW VERSION");
   const email = document.getElementById("email").value.trim().toLowerCase();
   const loader = document.getElementById("loader");
   const errorBox = document.getElementById("errorBox");
@@ -133,6 +132,7 @@ async function login() {
   }
 
   try {
+    // 1. בדיקת whitelist (ללא JWT)
     const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
       method: "POST",
       headers: {
@@ -150,6 +150,7 @@ async function login() {
       return;
     }
 
+    // 2. Magic link רק אם מותר
     const { error } = await client.auth.signInWithOtp({
       email,
       options: {
@@ -173,7 +174,7 @@ async function login() {
 }
 
 // =========================
-// 📅 DAYS + SLOTS
+// 📅 DAYS
 // =========================
 function buildDays() {
   const container = document.getElementById("days");
@@ -215,14 +216,14 @@ function buildDays() {
 }
 
 // =========================
-// 📝 SUBMIT (FIXED JWT)
+// 📝 SUBMIT (JWT ONLY HERE)
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
 
-  const { data: { user } } = await client.auth.getUser();
+  const { data: { session } } = await client.auth.getSession();
 
-  if (!user) {
+  if (!session) {
     alert("צריך להתחבר");
     return;
   }
@@ -232,20 +233,12 @@ async function submitForm() {
     return;
   }
 
-  const { data: sessionData } = await client.auth.getSession();
-  const token = sessionData?.session?.access_token;
-
-  if (!token) {
-    alert("אין session פעיל");
-    return;
-  }
-
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${token}`,
+      Authorization: `Bearer ${session.access_token}`,
     },
     body: JSON.stringify({
       name,
