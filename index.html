@@ -103,7 +103,7 @@ button {
 
 <input id="name" placeholder="שם מלא">
 
-<div class="days" id="days"></div>
+<div class="days" id="daysWrapper"></div>
 
 <button class="primary" onclick="submitForm()">הרשמה</button>
 
@@ -148,7 +148,7 @@ async function logout() {
 }
 
 // =========================
-// UI AUTH CONTROL
+// UI CONTROL
 // =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
@@ -159,6 +159,7 @@ async function updateAuthUI() {
   const nameInput = document.getElementById("name");
   const submitBtn = document.querySelector(".primary");
   const authLine = document.getElementById("authLine");
+  const daysWrapper = document.getElementById("daysWrapper");
 
   if (user) {
     emailInput.style.display = "none";
@@ -167,6 +168,7 @@ async function updateAuthUI() {
     nameInput.style.display = "block";
     submitBtn.style.display = "block";
     authLine.style.display = "block";
+    daysWrapper.style.display = "grid";
 
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
@@ -179,6 +181,7 @@ async function updateAuthUI() {
     nameInput.style.display = "none";
     submitBtn.style.display = "none";
     authLine.style.display = "none";
+    daysWrapper.style.display = "none";
 
     document.getElementById("userBox").innerHTML = "";
   }
@@ -188,7 +191,7 @@ async function updateAuthUI() {
 // DAYS + HOURS
 // =========================
 function buildDays() {
-  const container = document.getElementById("days");
+  const container = document.getElementById("daysWrapper");
 
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
