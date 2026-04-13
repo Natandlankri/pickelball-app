@@ -51,6 +51,7 @@ button {
 #userBox {
   margin-top: 10px;
   font-size: 14px;
+  opacity: 0.9;
 }
 </style>
 </head>
@@ -84,10 +85,12 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
 
-  if (!email) return alert("הכנס אימייל");
+  if (!email) {
+    return alert("הכנס אימייל");
+  }
 
   try {
-    // 1️⃣ בדיקה מול allowed_users
+    // 🔍 בדיקת הרשאה מול Edge Function
     const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
       method: "POST",
       headers: {
@@ -104,15 +107,16 @@ async function login() {
       return alert("האימייל הזה לא מורשה להתחבר ❌");
     }
 
-    // 2️⃣ מורשה → שולחים Magic Link
+    // ✅ מורשה → שולחים Magic Link
     const { error } = await client.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: location.href,
+        emailRedirectTo: window.location.href,
       },
     });
 
     if (error) {
+      console.error(error);
       return alert("שגיאה בשליחת מייל");
     }
 
@@ -125,7 +129,7 @@ async function login() {
 }
 
 // =========================
-// UI
+// UI עדכון משתמש
 // =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
