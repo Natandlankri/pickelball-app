@@ -121,8 +121,9 @@ let selected = [];
 // 📦 FETCH REGISTRATIONS
 // =========================
 async function fetchRegistrations() {
-  const { data: { session } } = await client.auth.getSession();
-  if (!session) return;
+const { data: { session } } = await client.auth.getSession();
+
+if (!session?.access_token) return;
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
     method: "GET",
@@ -259,7 +260,8 @@ async function submitForm() {
 // 🔄 SESSION
 // =========================
 async function checkSession() {
-  const { data: { user } } = await client.auth.getUser();
+const { data: { session } } = await client.auth.getSession();
+const user = session?.user;
 
   const authBox = document.getElementById("authBox");
   const appBox = document.getElementById("appBox");
@@ -281,7 +283,8 @@ async function checkSession() {
 // =========================
 // INIT
 // =========================
-  window.addEventListener("load", async () => {
+window.addEventListener("load", async () => {
+  // 🔥 wait for Supabase to restore session properly
   const { data, error } = await client.auth.getSession();
 
   if (data.session) {
@@ -289,9 +292,15 @@ async function checkSession() {
   } else {
     console.log("NO SESSION FOUND");
   }
-checkSession();
-    });
-client.auth.onAuthStateChange(() => checkSession());
+
+  // build UI only after session is checked
+  checkSession();
+});
+
+// 🔥 keep auth listener for login/logout changes
+client.auth.onAuthStateChange((_event, session) => {
+  checkSession();
+});
 </script>
 
 </body>
