@@ -112,7 +112,6 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     persistSession: true,
     autoRefreshToken: true,
     detectSessionInUrl: true,
-    storage: localStorage,
   },
 });
 
@@ -282,6 +281,14 @@ async function checkSession() {
 // =========================
 // INIT
 // =========================
+  window.addEventListener("load", async () => {
+  const { data, error } = await client.auth.getSession();
+
+  if (data.session) {
+    console.log("SESSION RESTORED", data.session);
+  } else {
+    console.log("NO SESSION FOUND");
+  }
 checkSession();
 client.auth.onAuthStateChange(() => checkSession());
 </script>
