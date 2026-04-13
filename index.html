@@ -30,40 +30,6 @@ input {
   border: none;
 }
 
-.days {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-}
-
-.day {
-  background: #334155;
-  padding: 12px;
-  border-radius: 12px;
-}
-
-.count { font-size: 12px; opacity: 0.8; }
-.players { font-size: 12px; margin-top: 5px; }
-
-.hours {
-  display: flex;
-  gap: 5px;
-  margin-top: 8px;
-  flex-wrap: wrap;
-}
-
-.hour {
-  background: #475569;
-  padding: 6px 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.hour.selected {
-  background: #22c55e;
-}
-
 button {
   width: 100%;
   margin-top: 10px;
@@ -74,15 +40,13 @@ button {
   cursor: pointer;
 }
 
-.primary { background: #38bdf8; }
-.login { background: #6366f1; color: white; }
-
-.delete-btn {
-  background: #ef4444;
+.login {
+  background: #6366f1;
   color: white;
-  border: none;
-  padding: 4px 8px;
-  border-radius: 6px;
+}
+
+.primary {
+  background: #38bdf8;
 }
 </style>
 </head>
@@ -90,24 +54,16 @@ button {
 <body dir="rtl">
 
 <div class="container">
-<h1>🎾 פיקלבול</h1>
+  <h1>🎾 פיקלבול</h1>
 
-<div class="card">
+  <div class="card">
 
-<input id="email" placeholder="אימייל להתחברות">
-<button class="login" onclick="login()">🔐 התחבר</button>
+    <input id="email" placeholder="אימייל להתחברות">
+    <button class="login" onclick="login()">🔐 התחבר</button>
 
-<hr id="authLine">
+    <div id="userBox"></div>
 
-<div id="userBox"></div>
-
-<input id="name" placeholder="שם מלא">
-
-<div class="days" id="daysWrapper"></div>
-
-<button class="primary" onclick="submitForm()">הרשמה</button>
-
-</div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -116,248 +72,74 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
-const CREATE_URL = `${SUPABASE_URL}/functions/v1/create-registration`;
-const DELETE_URL = `${SUPABASE_URL}/functions/v1/delete-registration`;
-
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-const HOURS = ["18:00","19:00","20:00"];
-
-let selected = [];
-let dayMap = {};
-
 // =========================
-// AUTH
+// 🔐 LOGIN עם בדיקת הרשאה
 // =========================
 async function login() {
-  const email = document.getElementById("email").value.trim();
+  const email = document.getElementById("email").value.trim().toLowerCase();
+
   if (!email) return alert("הכנס אימייל");
 
-  await client.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: location.href }
-  });
+  try {
+    // 1️⃣ בדיקה אם המשתמש מורשה
+    const checkRes = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+      },
+      body: JSON.stringify({ email }),
+    });
 
-  alert("נשלח מייל 📧");
-}
+    const checkData = await checkRes.json();
 
-async function logout() {
-  await client.auth.signOut();
-  updateAuthUI();
+    // ❌ לא מורשה
+    if (!checkRes.ok || !checkData.allowed) {
+      return alert("האימייל הזה לא מורשה להתחברות ❌");
+    }
+
+    // 2️⃣ מורשה → שולחים Magic Link
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: location.href
+      }
+    });
+
+    if (error) {
+      return alert("שגיאה בשליחת מייל");
+    }
+
+    alert("נשלח מייל 📧");
+
+  } catch (err) {
+    console.error(err);
+    alert("שגיאה בחיבור לשרת");
+  }
 }
 
 // =========================
-// UI CONTROL
+// UI AUTH (בונוס)
 // =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
-  const emailInput = document.getElementById("email");
-  const loginBtn = document.querySelector(".login");
-
-  const nameInput = document.getElementById("name");
-  const submitBtn = document.querySelector(".primary");
-  const authLine = document.getElementById("authLine");
-  const daysWrapper = document.getElementById("daysWrapper");
-
   if (user) {
-    emailInput.style.display = "none";
-    loginBtn.style.display = "none";
-
-    nameInput.style.display = "block";
-    submitBtn.style.display = "block";
-    authLine.style.display = "block";
-    daysWrapper.style.display = "grid";
+    document.getElementById("email").style.display = "none";
 
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
-      <button onclick="logout()">יציאה</button>
     `;
   } else {
-    emailInput.style.display = "block";
-    loginBtn.style.display = "block";
-
-    nameInput.style.display = "none";
-    submitBtn.style.display = "none";
-    authLine.style.display = "none";
-    daysWrapper.style.display = "none";
-
     document.getElementById("userBox").innerHTML = "";
   }
 }
 
-// =========================
-// DAYS + HOURS
-// =========================
-function buildDays() {
-  const container = document.getElementById("daysWrapper");
-
-  for (let i = 1; i <= 7; i++) {
-    let d = new Date();
-    d.setDate(d.getDate() + i);
-
-    let iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-      .toISOString().split("T")[0];
-
-    let label = d.toLocaleDateString("he-IL", {
-      weekday: "short",
-      day: "2-digit",
-      month: "2-digit"
-    });
-
-    let div = document.createElement("div");
-    div.className = "day";
-
-    div.innerHTML = `
-      <div>${label}</div>
-      <div class="count">טוען...</div>
-      <div class="players"></div>
-      <div class="hours">
-        ${HOURS.map(h => `<div class="hour" data-hour="${h}">${h}</div>`).join("")}
-      </div>
-    `;
-
-    div.querySelectorAll(".hour").forEach(hourEl => {
-      hourEl.onclick = (e) => {
-        e.stopPropagation();
-
-        const key = `${iso}|${hourEl.dataset.hour}`;
-
-        hourEl.classList.toggle("selected");
-
-        if (selected.includes(key)) {
-          selected = selected.filter(x => x !== key);
-        } else {
-          selected.push(key);
-        }
-      };
-    });
-
-    dayMap[iso] = div;
-    container.appendChild(div);
-  }
-}
-
-// =========================
-// LOAD
-// =========================
-async function load() {
-  const { data: { session } } = await client.auth.getSession();
-  if (!session) return;
-
-  const res = await fetch(GET_URL, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    }
-  });
-
-  const data = await res.json();
-  const grouped = {};
-
-  (data || []).forEach(r => {
-    const key = `${r.date}|${r.time}`;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(r);
-  });
-
-  for (let date in dayMap) {
-    const el = dayMap[date];
-
-    let total = 0;
-
-    el.querySelectorAll(".hour").forEach(hourEl => {
-      const hour = hourEl.dataset.hour;
-      const key = `${date}|${hour}`;
-      const list = grouped[key] || [];
-
-      total += list.length;
-
-      hourEl.innerText = `${hour} (${list.length})`;
-    });
-
-    el.querySelector(".count").innerText = `${total} שחקנים`;
-
-    el.querySelector(".players").innerHTML = Object.entries(grouped)
-      .filter(([k]) => k.startsWith(date))
-      .flatMap(([k, players]) =>
-        players.map(p => `
-          <div style="display:flex;justify-content:space-between;">
-            <span>${p.name} (${p.time})</span>
-            <button class="delete-btn" onclick="deleteRow('${p.id}')">❌</button>
-          </div>
-        `)
-      ).join("");
-  }
-}
-
-// =========================
-// SUBMIT
-// =========================
-async function submitForm() {
-  const name = document.getElementById("name").value.trim();
-  const { data: { session } } = await client.auth.getSession();
-
-  if (!session) return alert("יש להתחבר קודם");
-  if (!name || selected.length === 0) return alert("מלא הכל");
-
-  await fetch(CREATE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({
-      name,
-      slots: selected
-    })
-  });
-
-  selected = [];
-  document.querySelectorAll(".hour.selected")
-    .forEach(h => h.classList.remove("selected"));
-
-  await load();
-}
-
-// =========================
-// DELETE
-// =========================
-async function deleteRow(id) {
-  const { data: { session } } = await client.auth.getSession();
-
-  if (!session) return alert("צריך להתחבר");
-
-  if (!confirm("למחוק את ההרשמה?")) return;
-
-  const res = await fetch(DELETE_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ id })
-  });
-
-  const result = await res.json();
-
-  if (!res.ok) return alert(result.error);
-
-  await load();
-}
-
-// =========================
-// INIT
-// =========================
-buildDays();
 updateAuthUI();
-client.auth.onAuthStateChange(() => {
-  updateAuthUI();
-  load();
-});
+client.auth.onAuthStateChange(() => updateAuthUI());
+
 </script>
 
 </body>
