@@ -47,16 +47,9 @@ button {
 .login { background: #6366f1; color: white; }
 .primary { background: #38bdf8; }
 
-.day {
-  background: #334155;
-  padding: 10px;
-  border-radius: 12px;
-  margin-top: 10px;
-}
-
 .slot {
   background: #475569;
-  padding: 6px;
+  padding: 8px;
   margin-top: 6px;
   border-radius: 8px;
   cursor: pointer;
@@ -74,10 +67,9 @@ button {
 
 #loader {
   display: none;
-  text-align: center;
-  margin-top: 10px;
-  font-size: 13px;
+  font-size: 12px;
   opacity: 0.7;
+  margin-top: 5px;
 }
 </style>
 </head>
@@ -123,7 +115,7 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let selected = [];
 
 // =========================
-// 🔐 LOGIN + whitelist
+// 🔐 CHECK USER (WHITELIST)
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
@@ -145,7 +137,6 @@ async function login() {
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ email }),
     });
@@ -176,7 +167,7 @@ async function login() {
 
   } catch (err) {
     loader.style.display = "none";
-    errorBox.innerText = "שגיאה בחיבור לשרת";
+    errorBox.innerText = "שגיאה בשרת";
   }
 }
 
@@ -185,8 +176,7 @@ async function login() {
 // =========================
 function buildDays() {
   const container = document.getElementById("days");
-
-  const slots = ["18:00", "19:00", "20:00"];
+  const times = ["18:00", "19:00", "20:00"];
 
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
@@ -194,12 +184,12 @@ function buildDays() {
 
     let date = d.toISOString().split("T")[0];
 
-    const dayDiv = document.createElement("div");
-    dayDiv.className = "card";
+    const card = document.createElement("div");
+    card.className = "card";
 
-    dayDiv.innerHTML = `<b>${date}</b>`;
+    card.innerHTML = `<b>${date}</b>`;
 
-    slots.forEach(time => {
+    times.forEach(time => {
       const slot = document.createElement("div");
       slot.className = "slot";
 
@@ -216,10 +206,10 @@ function buildDays() {
         }
       };
 
-      dayDiv.appendChild(slot);
+      card.appendChild(slot);
     });
 
-    container.appendChild(dayDiv);
+    container.appendChild(card);
   }
 }
 
@@ -229,9 +219,9 @@ function buildDays() {
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
 
-  const { data: { user }, error } = await client.auth.getUser();
+  const { data: { user } } = await client.auth.getUser();
 
-  if (error || !user) {
+  if (!user) {
     alert("צריך להתחבר");
     return;
   }
@@ -241,12 +231,11 @@ async function submitForm() {
     return;
   }
 
-  // 🔥 חשוב מאוד: לקחת JWT אמיתי
   const { data: sessionData } = await client.auth.getSession();
   const token = sessionData?.session?.access_token;
 
   if (!token) {
-    alert("אין session פעיל — התחבר מחדש");
+    alert("אין session פעיל");
     return;
   }
 
@@ -259,7 +248,7 @@ async function submitForm() {
     },
     body: JSON.stringify({
       name,
-      slots: selected,
+      slots: selected
     }),
   });
 
@@ -287,7 +276,6 @@ async function checkSession() {
   if (user) {
     authBox.style.display = "none";
     appBox.style.display = "block";
-
     userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
   } else {
     authBox.style.display = "block";
