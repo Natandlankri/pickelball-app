@@ -53,6 +53,11 @@ button {
   font-size: 14px;
   opacity: 0.9;
 }
+
+.error {
+  color: #ef4444;
+  margin-top: 10px;
+}
 </style>
 </head>
 
@@ -65,6 +70,8 @@ button {
 
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
+
+    <div id="errorBox" class="error"></div>
 
     <div id="userBox"></div>
 
@@ -85,30 +92,43 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
 
+  const errorBox = document.getElementById("errorBox");
+  errorBox.innerText = "";
+
   if (!email) {
-    return alert("הכנס אימייל");
+    errorBox.innerText = "נא להזין אימייל";
+    return;
   }
 
   try {
-    // 🔍 בדיקת whitelist מול Edge Function
+    // =========================
+    // 🔍 בדיקת whitelist
+    // =========================
     const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`, // 🔥 FIX ל-401
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`, // 🔥 פותר CORS/Edge issues
       },
       body: JSON.stringify({ email }),
     });
 
     const data = await res.json();
 
-    // ❌ לא מורשה
-    if (!res.ok || !data.allowed) {
-      return alert("האימייל לא מורשה ❌");
+    if (!res.ok) {
+      errorBox.innerText = data.error || "שגיאה בבדיקה";
+      return;
     }
 
-    // ✅ מורשה → Magic Link
+    if (!data.allowed) {
+      errorBox.innerText = "האימייל לא מורשה ❌";
+      return;
+    }
+
+    // =========================
+    // 📧 Magic Link
+    // =========================
     const { error } = await client.auth.signInWithOtp({
       email,
       options: {
@@ -118,14 +138,15 @@ async function login() {
 
     if (error) {
       console.error(error);
-      return alert("שגיאה בשליחת מייל");
+      errorBox.innerText = "שגיאה בשליחת מייל";
+      return;
     }
 
     alert("נשלח מייל 📧");
 
   } catch (err) {
     console.error(err);
-    alert("שגיאה בחיבור לשרת");
+    errorBox.innerText = "שגיאה בחיבור לשרת";
   }
 }
 
@@ -136,19 +157,17 @@ async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
   const emailInput = document.getElementById("email");
-  const loginBtn = document.querySelector(".login");
+  const userBox = document.getElementById("userBox");
 
   if (user) {
     emailInput.style.display = "none";
-    loginBtn.style.display = "none";
 
-    document.getElementById("userBox").innerHTML = `
+    userBox.innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
     `;
   } else {
     emailInput.style.display = "block";
-    loginBtn.style.display = "block";
-    document.getElementById("userBox").innerHTML = "";
+    userBox.innerHTML = "";
   }
 }
 
