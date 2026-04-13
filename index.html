@@ -52,7 +52,6 @@ button {
   padding: 8px;
   margin-top: 6px;
   border-radius: 8px;
-  cursor: pointer;
 }
 
 .slot.selected {
@@ -90,14 +89,12 @@ button {
 
   <!-- APP -->
   <div id="appBox" style="display:none;">
-
     <div class="card">
       <input id="name" placeholder="שם מלא">
       <button class="primary" onclick="submitForm()">הרשמה</button>
     </div>
 
     <div id="days"></div>
-
   </div>
 
   <div id="userBox"></div>
@@ -118,25 +115,84 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: localStorage,
   },
 });
-  
+
 let selected = [];
 
+// =========================
+// 📦 FETCH REGISTRATIONS
+// =========================
+async function fetchRegistrations() {
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    method: "GET",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
+
+  const data = await res.json();
+
+  if (res.ok) {
+    renderRegistrations(data);
+  }
+}
+
+// =========================
+// 🎾 RENDER UI
+// =========================
+function renderRegistrations(data) {
+  const container = document.getElementById("days");
+  container.innerHTML = "";
+
+  const times = ["07:30", "17:00"];
+
+  const grouped = {};
+  data.forEach(r => {
+    if (!grouped[r.date]) grouped[r.date] = [];
+    grouped[r.date].push(r);
+  });
+
+  for (let i = 1; i <= 7; i++) {
+    let d = new Date();
+    d.setDate(d.getDate() + i);
+    let date = d.toISOString().split("T")[0];
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    let html = `<b>${date}</b><br><br>`;
+
+    times.forEach(time => {
+      const booked = (grouped[date] || []).find(x => x.time === time);
+
+      html += `
+        <div class="slot ${booked ? "selected" : ""}">
+          ${time} ${booked ? " - " + booked.name : ""}
+        </div>
+      `;
+    });
+
+    card.innerHTML = html;
+    container.appendChild(card);
+  }
+}
+
+// =========================
+// 🔐 LOGIN
+// =========================
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
   const loader = document.getElementById("loader");
   const errorBox = document.getElementById("errorBox");
 
-  errorBox.innerText = "";
   loader.style.display = "block";
-
-  if (!email) {
-    loader.style.display = "none";
-    errorBox.innerText = "נא להזין אימייל";
-    return;
-  }
+  errorBox.innerText = "";
 
   try {
-const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -149,93 +205,34 @@ const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
     const data = await res.json();
 
     if (!res.ok || !data.allowed) {
-      loader.style.display = "none";
-      errorBox.innerText = "האימייל לא מורשה ❌";
-      return;
+      throw new Error("האימייל לא מורשה");
     }
 
-    // 2. Magic link רק אם מותר
     const { error } = await client.auth.signInWithOtp({
       email,
-      options: {
-        emailRedirectTo: window.location.href,
-      },
+      options: { emailRedirectTo: window.location.href },
     });
 
-    loader.style.display = "none";
-
-    if (error) {
-      errorBox.innerText = "שגיאה בשליחת מייל";
-      return;
-    }
+    if (error) throw error;
 
     alert("נשלח מייל 📧");
 
   } catch (err) {
-    loader.style.display = "none";
-    errorBox.innerText = "שגיאה בשרת";
+    errorBox.innerText = err.message;
   }
+
+  loader.style.display = "none";
 }
 
 // =========================
-// 📅 DAYS
-// =========================
-function buildDays() {
-  const container = document.getElementById("days");
-  const times = ["07:30", "17:00"];
-
-  for (let i = 1; i <= 7; i++) {
-    let d = new Date();
-    d.setDate(d.getDate() + i);
-
-    let date = d.toISOString().split("T")[0];
-
-    const card = document.createElement("div");
-    card.className = "card";
-
-    card.innerHTML = `<b>${date}</b>`;
-
-    times.forEach(time => {
-      const slot = document.createElement("div");
-      slot.className = "slot";
-
-      const key = `${date}|${time}`;
-      slot.innerText = time;
-
-      slot.onclick = () => {
-        slot.classList.toggle("selected");
-
-        if (selected.includes(key)) {
-          selected = selected.filter(x => x !== key);
-        } else {
-          selected.push(key);
-        }
-      };
-
-      card.appendChild(slot);
-    });
-
-    container.appendChild(card);
-  }
-}
-
-// =========================
-// 📝 SUBMIT (JWT ONLY HERE)
+// 📝 SUBMIT
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
-
   const { data: { session } } = await client.auth.getSession();
 
-  if (!session) {
-    alert("צריך להתחבר");
-    return;
-  }
-
-  if (!name || selected.length === 0) {
-    alert("בחר שם ושעות");
-    return;
-  }
+  if (!session) return alert("צריך להתחבר");
+  if (!name || selected.length === 0) return alert("בחר שם ושעות");
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
@@ -244,25 +241,23 @@ async function submitForm() {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({
-      name,
-      slots: selected
-    }),
+    body: JSON.stringify({ name, slots: selected }),
   });
 
   const data = await res.json();
 
   if (!res.ok) {
-    alert(data.error || "שגיאה בהרשמה");
-    return;
+    return alert(data.error);
   }
 
   alert("נרשמת בהצלחה 🎾");
   selected = [];
+
+  fetchRegistrations();
 }
 
 // =========================
-// 🔄 AUTH STATE
+// 🔄 SESSION
 // =========================
 async function checkSession() {
   const { data: { user } } = await client.auth.getUser();
@@ -275,6 +270,8 @@ async function checkSession() {
     authBox.style.display = "none";
     appBox.style.display = "block";
     userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
+
+    fetchRegistrations();
   } else {
     authBox.style.display = "block";
     appBox.style.display = "none";
@@ -282,9 +279,10 @@ async function checkSession() {
   }
 }
 
-buildDays();
+// =========================
+// INIT
+// =========================
 checkSession();
-
 client.auth.onAuthStateChange(() => checkSession());
 </script>
 
