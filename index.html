@@ -123,7 +123,7 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let selected = [];
 
 // =========================
-// 🔐 LOGIN (whitelist רק בלחיצה)
+// 🔐 LOGIN + whitelist
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
@@ -145,6 +145,7 @@ async function login() {
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ email }),
     });
@@ -223,25 +224,42 @@ function buildDays() {
 }
 
 // =========================
-// 📝 SUBMIT
+// 📝 SUBMIT (FIXED JWT)
 // =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
-  const { data: { user } } = await client.auth.getUser();
 
-  if (!user) return alert("צריך להתחבר");
-  if (!name || selected.length === 0) return alert("בחר שעות");
+  const { data: { user }, error } = await client.auth.getUser();
+
+  if (error || !user) {
+    alert("צריך להתחבר");
+    return;
+  }
+
+  if (!name || selected.length === 0) {
+    alert("בחר שם ושעות");
+    return;
+  }
+
+  // 🔥 חשוב מאוד: לקחת JWT אמיתי
+  const { data: sessionData } = await client.auth.getSession();
+  const token = sessionData?.session?.access_token;
+
+  if (!token) {
+    alert("אין session פעיל — התחבר מחדש");
+    return;
+  }
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      Authorization: `Bearer ${token}`,
     },
     body: JSON.stringify({
       name,
-      slots: selected
+      slots: selected,
     }),
   });
 
@@ -257,7 +275,7 @@ async function submitForm() {
 }
 
 // =========================
-// 🔄 AUTH STATE (בלי loader בטעינה)
+// 🔄 AUTH STATE
 // =========================
 async function checkSession() {
   const { data: { user } } = await client.auth.getUser();
