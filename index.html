@@ -13,8 +13,11 @@ body {
   margin: 0;
 }
 
-.container { max-width: 500px; margin: auto; padding: 20px; }
-h1 { text-align: center; }
+.container {
+  max-width: 500px;
+  margin: auto;
+  padding: 20px;
+}
 
 .card {
   background: #1e293b;
@@ -45,8 +48,9 @@ button {
   color: white;
 }
 
-.primary {
-  background: #38bdf8;
+#userBox {
+  margin-top: 10px;
+  font-size: 14px;
 }
 </style>
 </head>
@@ -75,7 +79,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 // =========================
-// 🔐 LOGIN עם בדיקת הרשאה
+// 🔐 LOGIN עם whitelist check
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
@@ -83,8 +87,8 @@ async function login() {
   if (!email) return alert("הכנס אימייל");
 
   try {
-    // 1️⃣ בדיקה אם המשתמש מורשה
-    const checkRes = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
+    // 1️⃣ בדיקה מול allowed_users
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -93,19 +97,19 @@ async function login() {
       body: JSON.stringify({ email }),
     });
 
-    const checkData = await checkRes.json();
+    const data = await res.json();
 
     // ❌ לא מורשה
-    if (!checkRes.ok || !checkData.allowed) {
-      return alert("האימייל הזה לא מורשה להתחברות ❌");
+    if (!res.ok || !data.allowed) {
+      return alert("האימייל הזה לא מורשה להתחבר ❌");
     }
 
     // 2️⃣ מורשה → שולחים Magic Link
     const { error } = await client.auth.signInWithOtp({
       email,
       options: {
-        emailRedirectTo: location.href
-      }
+        emailRedirectTo: location.href,
+      },
     });
 
     if (error) {
@@ -121,25 +125,30 @@ async function login() {
 }
 
 // =========================
-// UI AUTH (בונוס)
+// UI
 // =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
+  const emailInput = document.getElementById("email");
+  const loginBtn = document.querySelector(".login");
+
   if (user) {
-    document.getElementById("email").style.display = "none";
+    emailInput.style.display = "none";
+    loginBtn.style.display = "none";
 
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
     `;
   } else {
+    emailInput.style.display = "block";
+    loginBtn.style.display = "block";
     document.getElementById("userBox").innerHTML = "";
   }
 }
 
 updateAuthUI();
 client.auth.onAuthStateChange(() => updateAuthUI());
-
 </script>
 
 </body>
