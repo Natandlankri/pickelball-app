@@ -290,6 +290,7 @@ async function checkSession() {
     console.log("NO SESSION FOUND");
   }
 checkSession();
+    });
 client.auth.onAuthStateChange(() => checkSession());
 </script>
 
