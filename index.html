@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>פיקלבול בת חפר 🎾</title>
+<title>פיקלבול 🎾</title>
 
 <style>
 body {
@@ -15,6 +15,12 @@ body {
 
 .container { max-width: 500px; margin: auto; padding: 20px; }
 h1 { text-align: center; }
+
+.card {
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 16px;
+}
 
 input {
   width: 100%;
@@ -31,58 +37,69 @@ input {
 }
 
 .day {
-  background: #1e293b;
+  background: #334155;
   padding: 12px;
   border-radius: 12px;
 }
 
-.slot {
-  background: #0f172a;
+.count { font-size: 12px; opacity: 0.8; }
+.players { font-size: 12px; margin-top: 5px; }
+
+.hours {
+  display: flex;
+  gap: 5px;
   margin-top: 8px;
-  padding: 8px;
-  border-radius: 8px;
+  flex-wrap: wrap;
 }
 
-.players {
+.hour {
+  background: #475569;
+  padding: 6px 8px;
+  border-radius: 8px;
   font-size: 12px;
-  margin-top: 5px;
+  cursor: pointer;
+}
+
+.hour.selected {
+  background: #22c55e;
 }
 
 button {
   width: 100%;
-  margin-top: 6px;
-  padding: 10px;
+  margin-top: 10px;
+  padding: 12px;
   border: none;
-  border-radius: 10px;
+  border-radius: 12px;
   font-weight: bold;
   cursor: pointer;
 }
 
 .primary { background: #38bdf8; }
 .login { background: #6366f1; color: white; }
+
+.delete-btn {
+  background: #ef4444;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
 </style>
 </head>
 
 <body dir="rtl">
 
 <div class="container">
+<h1>🎾 פיקלבול</h1>
 
-<h1>🎾 פיקלבול בת חפר</h1>
+<div class="card">
 
-<!-- LOGIN -->
-<input id="email" placeholder="אימייל">
+<input id="email" placeholder="אימייל להתחברות">
 <button class="login" onclick="login()">🔐 התחבר</button>
-
-<div id="loginMessage" style="text-align:center;margin-top:10px;">
-  🔐 התחבר כדי לראות זמני משחק
-</div>
 
 <hr>
 
 <div id="userBox"></div>
-
-<!-- APP -->
-<div id="appBox" style="display:none">
 
 <input id="name" placeholder="שם מלא">
 
@@ -91,7 +108,6 @@ button {
 <button class="primary" onclick="submitForm()">הרשמה</button>
 
 </div>
-
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -100,72 +116,54 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const db = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const GET_URL = `${SUPABASE_URL}/functions/v1/get-registrations`;
+const CREATE_URL = `${SUPABASE_URL}/functions/v1/create-registration`;
+const DELETE_URL = `${SUPABASE_URL}/functions/v1/delete-registration`;
 
-const TIMES = ["08:00", "10:00", "18:00"];
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+const HOURS = ["18:00","19:00","20:00"];
 
 let selected = [];
+let dayMap = {};
 
-
-// =========================
-// LOGIN
-// =========================
+// AUTH
 async function login() {
   const email = document.getElementById("email").value.trim();
   if (!email) return alert("הכנס אימייל");
 
-  const { error } = await db.auth.signInWithOtp({
+  await client.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
+      emailRedirectTo: location.href
     }
   });
 
-  if (error) return alert("שגיאה");
   alert("נשלח מייל 📧");
 }
 
+async function logout() {
+  await client.auth.signOut();
+  updateAuthUI();
+}
 
-// =========================
-// AUTH UI
-// =========================
 async function updateAuthUI() {
-  const { data: { user } } = await db.auth.getUser();
-
-  const appBox = document.getElementById("appBox");
-  const loginMsg = document.getElementById("loginMessage");
+  const { data: { user } } = await client.auth.getUser();
 
   if (user) {
-    appBox.style.display = "block";
-    loginMsg.style.display = "none";
-
     document.getElementById("email").style.display = "none";
     document.querySelector(".login").style.display = "none";
 
     document.getElementById("userBox").innerHTML = `
-      מחובר כ: <b>${user.email}</b>
+      <p>מחובר כ: <b>${user.email}</b></p>
       <button onclick="logout()">יציאה</button>
     `;
   } else {
-    appBox.style.display = "none";
-    loginMsg.style.display = "block";
-
-    document.getElementById("email").style.display = "block";
-    document.querySelector(".login").style.display = "block";
-
     document.getElementById("userBox").innerHTML = "";
   }
 }
 
-async function logout() {
-  await db.auth.signOut();
-  updateAuthUI();
-}
-
-
-// =========================
-// BUILD DAYS
-// =========================
+// DAYS + HOURS
 function buildDays() {
   const container = document.getElementById("days");
 
@@ -173,135 +171,157 @@ function buildDays() {
     let d = new Date();
     d.setDate(d.getDate() + i);
 
-    let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+    let iso = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
       .toISOString().split("T")[0];
 
-    const div = document.createElement("div");
+    let label = d.toLocaleDateString("he-IL", {
+      weekday: "short",
+      day: "2-digit",
+      month: "2-digit"
+    });
+
+    let div = document.createElement("div");
     div.className = "day";
 
     div.innerHTML = `
-      <b>${date}</b>
-
-      ${TIMES.map(t => `
-        <div class="slot">
-          <button type="button" onclick="selectSlot('${date}','${t}', this)">
-            🕒 ${t}
-          </button>
-
-          <div id="list-${date}-${t}" class="players"></div>
-        </div>
-      `).join("")}
+      <div>${label}</div>
+      <div class="count">טוען...</div>
+      <div class="players"></div>
+      <div class="hours">
+        ${HOURS.map(h => `<div class="hour" data-hour="${h}">${h}</div>`).join("")}
+      </div>
     `;
 
+    div.querySelectorAll(".hour").forEach(hourEl => {
+      hourEl.onclick = (e) => {
+        e.stopPropagation();
+
+        const key = `${iso}|${hourEl.dataset.hour}`;
+
+        hourEl.classList.toggle("selected");
+
+        if (selected.includes(key)) {
+          selected = selected.filter(x => x !== key);
+        } else {
+          selected.push(key);
+        }
+      };
+    });
+
+    dayMap[iso] = div;
     container.appendChild(div);
   }
 }
 
-
-// =========================
-// SELECT SLOT (FIXED)
-// =========================
-function selectSlot(date, time, el) {
-  const key = `${date}|${time}`;
-
-  if (selected.includes(key)) {
-    selected = selected.filter(x => x !== key);
-    el.style.background = "#1e293b";
-  } else {
-    selected.push(key);
-    el.style.background = "#22c55e";
-  }
-
-  console.log("SELECTED:", selected);
-}
-
-
-// =========================
-// LOAD DATA
-// =========================
+// LOAD
 async function load() {
-  const { data, error } = await db.functions.invoke("get-registrations");
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return;
 
-  if (error) {
-    console.error(error);
-    return;
-  }
-
-  const grouped = {};
-
-  data.forEach(r => {
-    const key = `${r.date}|${r.time}`;
-    if (!grouped[key]) grouped[key] = [];
-    grouped[key].push(r.name);
-  });
-
-  for (let i = 1; i <= 7; i++) {
-    let d = new Date();
-    d.setDate(d.getDate() + i);
-
-    let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
-      .toISOString().split("T")[0];
-
-    TIMES.forEach(time => {
-      const key = `${date}|${time}`;
-      const users = grouped[key] || [];
-
-      const el = document.getElementById(`list-${date}-${time}`);
-      if (!el) return;
-
-      el.innerHTML = `
-        👥 ${users.length} שחקנים<br>
-        ${users.length ? users.map(u => `• ${u}`).join("<br>") : "אין נרשמים"}
-      `;
-    });
-  }
-}
-
-
-// =========================
-// SUBMIT (FIXED)
-// =========================
-async function submitForm() {
-  const name = document.getElementById("name").value.trim();
-  const { data: { user } } = await db.auth.getUser();
-
-  if (!user) return alert("יש להתחבר");
-  if (!name) return alert("הכנס שם");
-
-  if (selected.length === 0) {
-    console.log("NO SELECTION", selected);
-    return alert("בחר לפחות שעה אחת");
-  }
-
-  const { error } = await db.functions.invoke("create-registration", {
-    body: {
-      name,
-      email: user.email,
-      slots: selected
+  const res = await fetch(GET_URL, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`
     }
   });
 
-  if (error) {
-    console.error(error);
-    return alert("שגיאה בהרשמה");
+  const data = await res.json();
+  const grouped = {};
+
+  (data || []).forEach(r => {
+    const key = `${r.date}|${r.time}`;
+    if (!grouped[key]) grouped[key] = [];
+    grouped[key].push(r);
+  });
+
+  for (let date in dayMap) {
+    const el = dayMap[date];
+
+    let total = 0;
+
+    el.querySelectorAll(".hour").forEach(hourEl => {
+      const hour = hourEl.dataset.hour;
+      const key = `${date}|${hour};
+      const list = grouped[key] || [];
+
+      total += list.length;
+      hourEl.innerText = `${hour} (${list.length})`;
+    });
+
+    el.querySelector(".count").innerText = `${total} שחקנים`;
+
+    el.querySelector(".players").innerHTML = Object.entries(grouped)
+      .filter(([k]) => k.startsWith(date))
+      .flatMap(([k, players]) =>
+        players.map(p => `
+          <div style="display:flex;justify-content:space-between;">
+            <span>${p.name} (${p.time})</span>
+            <button class="delete-btn" onclick="deleteRow('${p.id}')">❌</button>
+          </div>
+        `)
+      ).join("");
   }
-
-  selected = [];
-  await load();
-
-  alert("נרשמת בהצלחה 🎾");
 }
 
+// SUBMIT
+async function submitForm() {
+  const name = document.getElementById("name").value.trim();
+  const { data: { session } } = await client.auth.getSession();
+
+  if (!session) return alert("יש להתחבר קודם");
+  if (!name || selected.length === 0) return alert("מלא הכל");
+
+  await fetch(CREATE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({
+      name,
+      slots: selected
+    })
+  });
+
+  selected = [];
+  document.querySelectorAll(".hour.selected")
+    .forEach(h => h.classList.remove("selected"));
+
+  await load();
+}
+
+// DELETE
+async function deleteRow(id) {
+  const { data: { session } } = await client.auth.getSession();
+
+  if (!session) return alert("צריך להתחבר");
+
+  if (!confirm("למחוק את ההרשמה?")) return;
+
+  const res = await fetch(DELETE_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({ id })
+  });
+
+  const result = await res.json();
+
+  if (!res.ok) return alert(result.error);
+
+  await load();
+}
 
 // INIT
 buildDays();
 updateAuthUI();
-
-db.auth.onAuthStateChange(async () => {
-  await updateAuthUI();
-
-  const { data: { user } } = await db.auth.getUser();
-  if (user) load();
+client.auth.onAuthStateChange(() => {
+  updateAuthUI();
+  load();
 });
 </script>
 
