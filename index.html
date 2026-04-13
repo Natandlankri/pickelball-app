@@ -23,6 +23,7 @@ body {
   background: #1e293b;
   padding: 20px;
   border-radius: 16px;
+  margin-bottom: 15px;
 }
 
 input {
@@ -48,15 +49,27 @@ button {
   color: white;
 }
 
-#userBox {
-  margin-top: 10px;
-  font-size: 14px;
-  opacity: 0.9;
+.primary {
+  background: #38bdf8;
 }
 
-.error {
-  color: #ef4444;
-  margin-top: 10px;
+.day {
+  background: #334155;
+  padding: 12px;
+  border-radius: 12px;
+  margin-top: 8px;
+  cursor: pointer;
+}
+
+.day.selected {
+  background: #22c55e;
+}
+
+#loader {
+  text-align: center;
+  padding: 20px;
+  font-size: 14px;
+  opacity: 0.8;
 }
 </style>
 </head>
@@ -64,18 +77,36 @@ button {
 <body dir="rtl">
 
 <div class="container">
+
   <h1>🎾 פיקלבול</h1>
 
-  <div class="card">
+  <!-- LOADER -->
+  <div id="loader">בודק משתמש...</div>
 
+  <!-- AUTH -->
+  <div id="authBox" class="card" style="display:none;">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
+    <div id="errorBox"></div>
+  </div>
 
-    <div id="errorBox" class="error"></div>
+  <!-- APP -->
+  <div id="appBox" style="display:none;">
 
-    <div id="userBox"></div>
+    <div class="card">
+      <input id="name" placeholder="שם מלא">
+      <button class="primary" onclick="submitForm()">הרשמה</button>
+    </div>
+
+    <div class="card">
+      <h3>ימים</h3>
+      <div id="days"></div>
+    </div>
 
   </div>
+
+  <div id="userBox"></div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -86,12 +117,13 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
+let selected = [];
+
 // =========================
-// 🔐 LOGIN + whitelist check
+// 🔐 LOGIN (whitelist)
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
-
   const errorBox = document.getElementById("errorBox");
   errorBox.innerText = "";
 
@@ -101,34 +133,23 @@ async function login() {
   }
 
   try {
-    // =========================
-    // 🔍 בדיקת whitelist
-    // =========================
     const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`, // 🔥 פותר CORS/Edge issues
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ email }),
     });
 
     const data = await res.json();
 
-    if (!res.ok) {
-      errorBox.innerText = data.error || "שגיאה בבדיקה";
-      return;
-    }
-
-    if (!data.allowed) {
+    if (!res.ok || !data.allowed) {
       errorBox.innerText = "האימייל לא מורשה ❌";
       return;
     }
 
-    // =========================
-    // 📧 Magic Link
-    // =========================
     const { error } = await client.auth.signInWithOtp({
       email,
       options: {
@@ -137,7 +158,6 @@ async function login() {
     });
 
     if (error) {
-      console.error(error);
       errorBox.innerText = "שגיאה בשליחת מייל";
       return;
     }
@@ -145,33 +165,84 @@ async function login() {
     alert("נשלח מייל 📧");
 
   } catch (err) {
-    console.error(err);
     errorBox.innerText = "שגיאה בחיבור לשרת";
   }
 }
 
 // =========================
-// UI
+// 📅 DAYS
+// =========================
+function buildDays() {
+  const container = document.getElementById("days");
+
+  for (let i = 1; i <= 7; i++) {
+    let d = new Date();
+    d.setDate(d.getDate() + i);
+
+    let iso = d.toISOString().split("T")[0];
+
+    let div = document.createElement("div");
+    div.className = "day";
+
+    div.innerText = `יום ${i} - ${iso}`;
+
+    div.onclick = () => {
+      div.classList.toggle("selected");
+
+      if (selected.includes(iso)) {
+        selected = selected.filter(x => x !== iso);
+      } else {
+        selected.push(iso);
+      }
+    };
+
+    container.appendChild(div);
+  }
+}
+
+// =========================
+// 📝 SUBMIT
+// =========================
+async function submitForm() {
+  const { data: { user } } = await client.auth.getUser();
+  const name = document.getElementById("name").value.trim();
+
+  if (!user) return alert("צריך להתחבר");
+  if (!name || selected.length === 0) return alert("מלא הכל");
+
+  alert("נרשם בהצלחה 🎾");
+}
+
+// =========================
+// 🔄 AUTH STATE + LOADER
 // =========================
 async function updateAuthUI() {
-  const { data: { user } } = await client.auth.getUser();
-
-  const emailInput = document.getElementById("email");
+  const loader = document.getElementById("loader");
+  const authBox = document.getElementById("authBox");
+  const appBox = document.getElementById("appBox");
   const userBox = document.getElementById("userBox");
 
-  if (user) {
-    emailInput.style.display = "none";
+  loader.style.display = "block";
 
-    userBox.innerHTML = `
-      <p>מחובר כ: <b>${user.email}</b></p>
-    `;
+  const { data: { user } } = await client.auth.getUser();
+
+  loader.style.display = "none";
+
+  if (user) {
+    authBox.style.display = "none";
+    appBox.style.display = "block";
+
+    userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
   } else {
-    emailInput.style.display = "block";
+    authBox.style.display = "block";
+    appBox.style.display = "none";
     userBox.innerHTML = "";
   }
 }
 
+buildDays();
 updateAuthUI();
+
 client.auth.onAuthStateChange(() => updateAuthUI());
 </script>
 
