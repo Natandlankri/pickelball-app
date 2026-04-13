@@ -44,32 +44,40 @@ button {
   cursor: pointer;
 }
 
-.login {
-  background: #6366f1;
-  color: white;
-}
-
-.primary {
-  background: #38bdf8;
-}
+.login { background: #6366f1; color: white; }
+.primary { background: #38bdf8; }
 
 .day {
   background: #334155;
-  padding: 12px;
+  padding: 10px;
   border-radius: 12px;
-  margin-top: 8px;
+  margin-top: 10px;
+}
+
+.slot {
+  background: #475569;
+  padding: 6px;
+  margin-top: 6px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
-.day.selected {
+.slot.selected {
   background: #22c55e;
 }
 
-#loader {
-  text-align: center;
-  padding: 20px;
+#userBox {
+  margin-top: 10px;
   font-size: 14px;
-  opacity: 0.8;
+  opacity: 0.9;
+}
+
+#loader {
+  display: none;
+  text-align: center;
+  margin-top: 10px;
+  font-size: 13px;
+  opacity: 0.7;
 }
 </style>
 </head>
@@ -80,14 +88,12 @@ button {
 
   <h1>🎾 פיקלבול</h1>
 
-  <!-- LOADER -->
-  <div id="loader">בודק משתמש...</div>
-
   <!-- AUTH -->
-  <div id="authBox" class="card" style="display:none;">
+  <div id="authBox" class="card">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
-    <div id="errorBox"></div>
+    <div id="loader">בודק הרשאה...</div>
+    <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
   </div>
 
   <!-- APP -->
@@ -98,10 +104,7 @@ button {
       <button class="primary" onclick="submitForm()">הרשמה</button>
     </div>
 
-    <div class="card">
-      <h3>ימים</h3>
-      <div id="days"></div>
-    </div>
+    <div id="days"></div>
 
   </div>
 
@@ -120,14 +123,18 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let selected = [];
 
 // =========================
-// 🔐 LOGIN (whitelist)
+// 🔐 LOGIN (whitelist רק בלחיצה)
 // =========================
 async function login() {
   const email = document.getElementById("email").value.trim().toLowerCase();
+  const loader = document.getElementById("loader");
   const errorBox = document.getElementById("errorBox");
+
   errorBox.innerText = "";
+  loader.style.display = "block";
 
   if (!email) {
+    loader.style.display = "none";
     errorBox.innerText = "נא להזין אימייל";
     return;
   }
@@ -138,7 +145,6 @@ async function login() {
       headers: {
         "Content-Type": "application/json",
         apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
       },
       body: JSON.stringify({ email }),
     });
@@ -146,6 +152,7 @@ async function login() {
     const data = await res.json();
 
     if (!res.ok || !data.allowed) {
+      loader.style.display = "none";
       errorBox.innerText = "האימייל לא מורשה ❌";
       return;
     }
@@ -157,6 +164,8 @@ async function login() {
       },
     });
 
+    loader.style.display = "none";
+
     if (error) {
       errorBox.innerText = "שגיאה בשליחת מייל";
       return;
@@ -165,38 +174,51 @@ async function login() {
     alert("נשלח מייל 📧");
 
   } catch (err) {
+    loader.style.display = "none";
     errorBox.innerText = "שגיאה בחיבור לשרת";
   }
 }
 
 // =========================
-// 📅 DAYS
+// 📅 DAYS + SLOTS
 // =========================
 function buildDays() {
   const container = document.getElementById("days");
+
+  const slots = ["18:00", "19:00", "20:00"];
 
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
 
-    let iso = d.toISOString().split("T")[0];
+    let date = d.toISOString().split("T")[0];
 
-    let div = document.createElement("div");
-    div.className = "day";
+    const dayDiv = document.createElement("div");
+    dayDiv.className = "card";
 
-    div.innerText = `יום ${i} - ${iso}`;
+    dayDiv.innerHTML = `<b>${date}</b>`;
 
-    div.onclick = () => {
-      div.classList.toggle("selected");
+    slots.forEach(time => {
+      const slot = document.createElement("div");
+      slot.className = "slot";
 
-      if (selected.includes(iso)) {
-        selected = selected.filter(x => x !== iso);
-      } else {
-        selected.push(iso);
-      }
-    };
+      const key = `${date}|${time}`;
+      slot.innerText = time;
 
-    container.appendChild(div);
+      slot.onclick = () => {
+        slot.classList.toggle("selected");
+
+        if (selected.includes(key)) {
+          selected = selected.filter(x => x !== key);
+        } else {
+          selected.push(key);
+        }
+      };
+
+      dayDiv.appendChild(slot);
+    });
+
+    container.appendChild(dayDiv);
   }
 }
 
@@ -204,29 +226,45 @@ function buildDays() {
 // 📝 SUBMIT
 // =========================
 async function submitForm() {
-  const { data: { user } } = await client.auth.getUser();
   const name = document.getElementById("name").value.trim();
+  const { data: { user } } = await client.auth.getUser();
 
   if (!user) return alert("צריך להתחבר");
-  if (!name || selected.length === 0) return alert("מלא הכל");
+  if (!name || selected.length === 0) return alert("בחר שעות");
 
-  alert("נרשם בהצלחה 🎾");
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+    body: JSON.stringify({
+      name,
+      slots: selected
+    }),
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.error || "שגיאה בהרשמה");
+    return;
+  }
+
+  alert("נרשמת בהצלחה 🎾");
+  selected = [];
 }
 
 // =========================
-// 🔄 AUTH STATE + LOADER
+// 🔄 AUTH STATE (בלי loader בטעינה)
 // =========================
-async function updateAuthUI() {
-  const loader = document.getElementById("loader");
+async function checkSession() {
+  const { data: { user } } = await client.auth.getUser();
+
   const authBox = document.getElementById("authBox");
   const appBox = document.getElementById("appBox");
   const userBox = document.getElementById("userBox");
-
-  loader.style.display = "block";
-
-  const { data: { user } } = await client.auth.getUser();
-
-  loader.style.display = "none";
 
   if (user) {
     authBox.style.display = "none";
@@ -241,9 +279,9 @@ async function updateAuthUI() {
 }
 
 buildDays();
-updateAuthUI();
+checkSession();
 
-client.auth.onAuthStateChange(() => updateAuthUI());
+client.auth.onAuthStateChange(() => checkSession());
 </script>
 
 </body>
