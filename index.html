@@ -97,7 +97,7 @@ button {
 <input id="email" placeholder="אימייל להתחברות">
 <button class="login" onclick="login()">🔐 התחבר</button>
 
-<hr>
+<hr id="authLine">
 
 <div id="userBox"></div>
 
@@ -127,16 +127,16 @@ const HOURS = ["18:00","19:00","20:00"];
 let selected = [];
 let dayMap = {};
 
+// =========================
 // AUTH
+// =========================
 async function login() {
   const email = document.getElementById("email").value.trim();
   if (!email) return alert("הכנס אימייל");
 
   await client.auth.signInWithOtp({
     email,
-    options: {
-      emailRedirectTo: location.href
-    }
+    options: { emailRedirectTo: location.href }
   });
 
   alert("נשלח מייל 📧");
@@ -147,23 +147,46 @@ async function logout() {
   updateAuthUI();
 }
 
+// =========================
+// UI AUTH CONTROL
+// =========================
 async function updateAuthUI() {
   const { data: { user } } = await client.auth.getUser();
 
+  const emailInput = document.getElementById("email");
+  const loginBtn = document.querySelector(".login");
+
+  const nameInput = document.getElementById("name");
+  const submitBtn = document.querySelector(".primary");
+  const authLine = document.getElementById("authLine");
+
   if (user) {
-    document.getElementById("email").style.display = "none";
-    document.querySelector(".login").style.display = "none";
+    emailInput.style.display = "none";
+    loginBtn.style.display = "none";
+
+    nameInput.style.display = "block";
+    submitBtn.style.display = "block";
+    authLine.style.display = "block";
 
     document.getElementById("userBox").innerHTML = `
       <p>מחובר כ: <b>${user.email}</b></p>
       <button onclick="logout()">יציאה</button>
     `;
   } else {
+    emailInput.style.display = "block";
+    loginBtn.style.display = "block";
+
+    nameInput.style.display = "none";
+    submitBtn.style.display = "none";
+    authLine.style.display = "none";
+
     document.getElementById("userBox").innerHTML = "";
   }
 }
 
+// =========================
 // DAYS + HOURS
+// =========================
 function buildDays() {
   const container = document.getElementById("days");
 
@@ -213,7 +236,9 @@ function buildDays() {
   }
 }
 
+// =========================
 // LOAD
+// =========================
 async function load() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return;
@@ -241,10 +266,11 @@ async function load() {
 
     el.querySelectorAll(".hour").forEach(hourEl => {
       const hour = hourEl.dataset.hour;
-      const key = `${date}|${hour};
+      const key = `${date}|${hour}`;
       const list = grouped[key] || [];
 
       total += list.length;
+
       hourEl.innerText = `${hour} (${list.length})`;
     });
 
@@ -263,7 +289,9 @@ async function load() {
   }
 }
 
+// =========================
 // SUBMIT
+// =========================
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
   const { data: { session } } = await client.auth.getSession();
@@ -291,7 +319,9 @@ async function submitForm() {
   await load();
 }
 
+// =========================
 // DELETE
+// =========================
 async function deleteRow(id) {
   const { data: { session } } = await client.auth.getSession();
 
@@ -316,7 +346,9 @@ async function deleteRow(id) {
   await load();
 }
 
+// =========================
 // INIT
+// =========================
 buildDays();
 updateAuthUI();
 client.auth.onAuthStateChange(() => {
