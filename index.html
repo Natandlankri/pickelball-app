@@ -36,8 +36,6 @@ input {
 
 button {
   cursor: pointer;
-  border: none;
-  border-radius: 10px;
 }
 
 .login {
@@ -46,6 +44,8 @@ button {
   background: #6366f1;
   color: white;
   font-weight: bold;
+  border: none;
+  border-radius: 10px;
 }
 
 .primary {
@@ -53,6 +53,8 @@ button {
   padding: 12px;
   background: #38bdf8;
   font-weight: bold;
+  border: none;
+  border-radius: 10px;
 }
 
 .slot {
@@ -64,6 +66,10 @@ button {
 
 .slot.selected {
   background: #22c55e;
+}
+
+.slot.clickable {
+  cursor: pointer;
 }
 
 #userBox {
@@ -138,7 +144,7 @@ async function login() {
 }
 
 /* =========================
-   SESSION CHECK
+   SESSION
 ========================= */
 async function checkSession() {
   const { data: { session } } = await client.auth.getSession();
@@ -151,8 +157,7 @@ async function checkSession() {
   if (user) {
     authBox.style.display = "none";
     appBox.style.display = "block";
-    userBox.innerHTML = `מחובר: ${user.email}`;
-
+    userBox.innerHTML = `מחובר: <b>${user.email}</b>`;
     fetchRegistrations();
   } else {
     authBox.style.display = "block";
@@ -162,7 +167,7 @@ async function checkSession() {
 }
 
 /* =========================
-   FETCH REGISTRATIONS
+   FETCH
 ========================= */
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
@@ -181,7 +186,7 @@ async function fetchRegistrations() {
 }
 
 /* =========================
-   RENDER UI
+   RENDER
 ========================= */
 function renderRegistrations(data) {
   const container = document.getElementById("days");
@@ -208,6 +213,9 @@ function renderRegistrations(data) {
     times.forEach(time => {
       const booking = (grouped[date] || []).find(x => x.time === time);
 
+      const key = `${date}|${time}`;
+      const isSelected = selected.includes(key);
+
       if (booking) {
         html += `
           <div class="slot selected">
@@ -220,7 +228,12 @@ function renderRegistrations(data) {
           </div>
         `;
       } else {
-        html += `<div class="slot">${time}</div>`;
+        html += `
+          <div class="slot clickable ${isSelected ? "selected" : ""}"
+               onclick="toggleSlot('${key}')">
+            ${time}
+          </div>
+        `;
       }
     });
 
@@ -230,7 +243,22 @@ function renderRegistrations(data) {
 }
 
 /* =========================
-   SUBMIT REGISTRATION
+   TOGGLE SLOT
+========================= */
+function toggleSlot(key) {
+  const i = selected.indexOf(key);
+
+  if (i === -1) {
+    selected.push(key);
+  } else {
+    selected.splice(i, 1);
+  }
+
+  fetchRegistrations();
+}
+
+/* =========================
+   CREATE
 ========================= */
 async function submitForm() {
   const name = document.getElementById("name").value.trim();
@@ -239,7 +267,7 @@ async function submitForm() {
   if (!session) return alert("צריך להתחבר");
 
   if (!name || selected.length === 0) {
-    return alert("שם ושעה חובה");
+    return alert("בחר שם ושעות");
   }
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
@@ -254,9 +282,7 @@ async function submitForm() {
 
   const data = await res.json();
 
-  if (!res.ok) {
-    return alert(data.error);
-  }
+  if (!res.ok) return alert(data.error);
 
   selected = [];
   fetchRegistrations();
@@ -267,8 +293,7 @@ async function submitForm() {
 ========================= */
 async function deleteRegistration(id) {
   const { data: { session } } = await client.auth.getSession();
-
-  if (!session?.access_token) return alert("Not logged in");
+  if (!session?.access_token) return;
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
     method: "POST",
@@ -282,9 +307,7 @@ async function deleteRegistration(id) {
 
   const data = await res.json();
 
-  if (!res.ok) {
-    return alert(data.error);
-  }
+  if (!res.ok) return alert(data.error);
 
   fetchRegistrations();
 }
