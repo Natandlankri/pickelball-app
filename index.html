@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html lang="he">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>פיקלבול 🎾</title>
 
 <style>
@@ -52,7 +52,6 @@ button {
   padding: 8px;
   margin-top: 6px;
   border-radius: 8px;
-  cursor: pointer;
 }
 
 .slot.selected {
@@ -82,16 +81,16 @@ button {
 
   <!-- AUTH -->
   <div class="card" id="authBox">
-    <input id="email" placeholder="אימייל להתחברות" />
+    <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
     <div id="loader">בודק הרשאה...</div>
-    <div id="errorBox" style="color:red;"></div>
+    <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
   </div>
 
   <!-- APP -->
   <div id="appBox" style="display:none;">
     <div class="card">
-      <input id="name" placeholder="שם מלא" />
+      <input id="name" placeholder="שם מלא">
       <button class="primary" onclick="submitForm()">הרשמה</button>
     </div>
 
@@ -108,61 +107,45 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
-let currentUser = null;
 let selected = [];
 
-/* =========================
-   SESSION
-========================= */
-async function checkSession() {
+// =========================
+// 📦 FETCH REGISTRATIONS
+// =========================
+async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
-  currentUser = session?.user || null;
 
-  document.getElementById("authBox").style.display = currentUser ? "none" : "block";
-  document.getElementById("appBox").style.display = currentUser ? "block" : "none";
+  if (!session?.access_token) return;
 
-  if (currentUser) {
-    document.getElementById("userBox").innerHTML =
-      `<p>מחובר כ: <b>${currentUser.email}</b></p>`;
-    fetchRegistrations();
-  }
-}
-
-/* =========================
-   LOGIN
-========================= */
-async function login() {
-  const email = document.getElementById("email").value.trim();
-
-  const { error } = await client.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.href }
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    method: "GET",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
   });
 
-  if (error) {
-    document.getElementById("errorBox").innerText = error.message;
-    return;
-  }
-
-  alert("נשלח מייל 📧");
-}
-
-/* =========================
-   FETCH BOOKINGS
-========================= */
-async function fetchRegistrations() {
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`);
   const data = await res.json();
 
-  render(data);
+  if (res.ok) {
+    renderRegistrations(data);
+  } else {
+    console.error("Fetch error:", data);
+  }
 }
 
-/* =========================
-   RENDER UI
-========================= */
-function render(data) {
+// =========================
+// 🎾 RENDER UI
+// =========================
+function renderRegistrations(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
 
@@ -175,9 +158,9 @@ function render(data) {
   });
 
   for (let i = 1; i <= 7; i++) {
-    const d = new Date();
+    let d = new Date();
     d.setDate(d.getDate() + i);
-    const date = d.toISOString().split("T")[0];
+    let date = d.toISOString().split("T")[0];
 
     const card = document.createElement("div");
     card.className = "card";
@@ -185,14 +168,11 @@ function render(data) {
     let html = `<b>${date}</b><br><br>`;
 
     times.forEach(time => {
-      const booking = (grouped[date] || []).find(x => x.time === time);
-      const isMine = booking?.user_id === currentUser?.id;
+      const booked = (grouped[date] || []).find(x => x.time === time);
 
       html += `
-        <div class="slot ${booking ? "selected" : ""}"
-          ${isMine ? `onclick="deleteSlot('${booking.id}')"` : ""}>
-          ${time} ${booking ? " - " + booking.name : ""}
-          ${isMine ? " ❌" : ""}
+        <div class="slot ${booked ? "selected" : ""}">
+          ${time} ${booked ? " - " + booked.name : ""}
         </div>
       `;
     });
@@ -202,55 +182,123 @@ function render(data) {
   }
 }
 
-/* =========================
-   CREATE
-========================= */
+// =========================
+// 🔐 LOGIN
+// =========================
+async function login() {
+  const email = document.getElementById("email").value.trim().toLowerCase();
+  const loader = document.getElementById("loader");
+  const errorBox = document.getElementById("errorBox");
+
+  loader.style.display = "block";
+  errorBox.innerText = "";
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.allowed) {
+      throw new Error("האימייל לא מורשה");
+    }
+
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href },
+    });
+
+    if (error) throw error;
+
+    alert("נשלח מייל 📧");
+
+  } catch (err) {
+    errorBox.innerText = err.message;
+  }
+
+  loader.style.display = "none";
+}
+
+// =========================
+// 📝 SUBMIT
+// =========================
 async function submitForm() {
-  const name = document.getElementById("name").value;
-
+  const name = document.getElementById("name").value.trim();
   const { data: { session } } = await client.auth.getSession();
 
-  await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+  if (!session?.access_token) return alert("צריך להתחבר");
+  if (!name || selected.length === 0) return alert("בחר שם ושעות");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
     headers: {
+      "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json"
     },
-    body: JSON.stringify({
-      name,
-      slots: selected
-    })
+    body: JSON.stringify({ name, slots: selected }),
   });
 
+  const data = await res.json();
+
+  if (!res.ok) {
+    return alert(data.error);
+  }
+
+  alert("נרשמת בהצלחה 🎾");
   selected = [];
+
   fetchRegistrations();
 }
 
-/* =========================
-   DELETE
-========================= */
-async function deleteSlot(id) {
+// =========================
+// 🔄 SESSION + INIT
+// =========================
+async function checkSession() {
+  const { data: { session } } = await client.auth.getSession();
+  const user = session?.user;
+
+  const authBox = document.getElementById("authBox");
+  const appBox = document.getElementById("appBox");
+  const userBox = document.getElementById("userBox");
+
+  if (user) {
+    authBox.style.display = "none";
+    appBox.style.display = "block";
+    userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
+  } else {
+    authBox.style.display = "block";
+    appBox.style.display = "none";
+    userBox.innerHTML = "";
+  }
+}
+
+async function initApp() {
   const { data: { session } } = await client.auth.getSession();
 
-  await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
-    method: "POST",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({ id })
-  });
+  checkSession();
 
-  fetchRegistrations();
+  if (session?.access_token) {
+    fetchRegistrations();
+  }
 }
 
-/* =========================
-   INIT
-========================= */
-window.addEventListener("load", checkSession);
-client.auth.onAuthStateChange(checkSession);
+window.addEventListener("load", initApp);
+
+client.auth.onAuthStateChange((_event, session) => {
+  checkSession();
+
+  if (session?.access_token) {
+    fetchRegistrations();
+  }
+});
 </script>
 
 </body>
