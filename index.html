@@ -51,14 +51,9 @@ button {
   padding: 10px;
   margin-top: 6px;
   border-radius: 8px;
-  cursor: pointer;
   display: flex;
   justify-content: space-between;
   align-items: center;
-}
-
-.slot.selected {
-  background: #22c55e;
 }
 
 .delete-btn {
@@ -70,17 +65,8 @@ button {
   cursor: pointer;
 }
 
-#loader {
-  display: none;
-  font-size: 12px;
-  opacity: 0.7;
-  margin-top: 5px;
-}
-
-#userBox {
-  margin-top: 10px;
-  font-size: 14px;
-  opacity: 0.9;
+.slot.selected {
+  background: #22c55e;
 }
 </style>
 </head>
@@ -95,8 +81,6 @@ button {
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
-    <div id="loader">בודק הרשאה...</div>
-    <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
   </div>
 
   <!-- APP -->
@@ -109,8 +93,6 @@ button {
     <div id="days"></div>
   </div>
 
-  <div id="userBox"></div>
-
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -122,49 +104,56 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selected = [];
-let holidaysMap = {};
 
 // =========================
-// DELETE REGISTRATION
+// FIXED INIT (IMPORTANT)
 // =========================
-async function deleteRegistration(id) {
+window.addEventListener("load", async () => {
+
+  // wait for magic link session restore
+  await new Promise(r => setTimeout(r, 500));
+
   const { data: { session } } = await client.auth.getSession();
-  if (!session) return alert("צריך להתחבר");
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ id }),
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) {
-    return alert(data.error);
+  if (session) {
+    showApp();
+    await fetchRegistrations();
   }
 
-  alert("נמחק בהצלחה 🗑️");
-  fetchRegistrations();
+});
+
+// =========================
+// AUTH LISTENER FIX
+// =========================
+client.auth.onAuthStateChange(async (_event, session) => {
+  if (session) {
+    showApp();
+    await fetchRegistrations();
+  }
+});
+
+// =========================
+// SHOW UI
+// =========================
+function showApp() {
+  document.getElementById("authBox").style.display = "none";
+  document.getElementById("appBox").style.display = "block";
 }
 
 // =========================
-// TOGGLE SLOT
+// LOGIN
 // =========================
-function toggleSlot(date, time, el) {
-  const key = `${date}|${time}`;
+async function login() {
+  const email = document.getElementById("email").value;
 
-  const i = selected.indexOf(key);
-  if (i > -1) {
-    selected.splice(i, 1);
-    el.classList.remove("selected");
-  } else {
-    selected.push(key);
-    el.classList.add("selected");
-  }
+  await client.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: window.location.href
+    }
+  });
+
+  alert("נשלח מייל 📧");
 }
 
 // =========================
@@ -178,11 +167,32 @@ async function fetchRegistrations() {
     headers: {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${session.access_token}`,
-    },
+    }
   });
 
   const data = await res.json();
-  if (res.ok) render(data);
+  render(data);
+}
+
+// =========================
+// DELETE
+// =========================
+async function deleteRegistration(id) {
+  const { data: { session } } = await client.auth.getSession();
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ id }),
+  });
+
+  if (res.ok) {
+    fetchRegistrations();
+  }
 }
 
 // =========================
@@ -222,7 +232,7 @@ function render(data) {
         `;
       } else {
         html += `
-          <div class="slot" onclick="toggleSlot('${date}','${time}',this)">
+          <div class="slot">
             ${time}
           </div>
         `;
@@ -233,52 +243,6 @@ function render(data) {
     container.appendChild(card);
   }
 }
-
-// =========================
-// LOGIN
-// =========================
-async function login() {
-  const email = document.getElementById("email").value;
-
-  await client.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.href }
-  });
-
-  alert("נשלח מייל 📧");
-}
-
-// =========================
-// SUBMIT
-// =========================
-async function submitForm() {
-  const name = document.getElementById("name").value;
-  const { data: { session } } = await client.auth.getSession();
-
-  if (!session) return alert("צריך להתחבר");
-
-  await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-    },
-    body: JSON.stringify({ name, slots: selected }),
-  });
-
-  alert("נרשמת 🎾");
-  selected = [];
-  fetchRegistrations();
-}
-
-// =========================
-// INIT
-// =========================
-window.addEventListener("load", async () => {
-  const { data } = await client.auth.getSession();
-  if (data.session) fetchRegistrations();
-});
 </script>
 
 </body>
