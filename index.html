@@ -52,6 +52,12 @@ button {
   padding: 8px;
   margin-top: 6px;
   border-radius: 8px;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.slot:hover {
+  opacity: 0.85;
 }
 
 .slot.selected {
@@ -119,12 +125,12 @@ let selected = [];
 let holidaysMap = {};
 
 // =========================
-// 🇮🇱 LOAD ISRAEL HOLIDAYS (Hebcal API)
+// 🇮🇱 HOLIDAYS (Hebcal)
 // =========================
 async function loadHolidays(year = 2026) {
   try {
     const res = await fetch(
-       `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on&mod=on&nx=on`
+      `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on&mod=on&nx=on`
     );
 
     const data = await res.json();
@@ -137,7 +143,6 @@ async function loadHolidays(year = 2026) {
     });
 
     holidaysMap = map;
-    console.log("HOLIDAYS LOADED", holidaysMap);
 
   } catch (err) {
     console.error("Holiday API failed", err);
@@ -145,11 +150,29 @@ async function loadHolidays(year = 2026) {
 }
 
 // =========================
+// 🎯 SLOT CLICK LOGIC (FIX)
+// =========================
+function toggleSlot(date, time, el) {
+  const key = `${date}|${time}`;
+
+  const index = selected.indexOf(key);
+
+  if (index > -1) {
+    selected.splice(index, 1);
+    el.classList.remove("selected");
+  } else {
+    selected.push(key);
+    el.classList.add("selected");
+  }
+
+  console.log("Selected:", selected);
+}
+
+// =========================
 // 📦 FETCH REGISTRATIONS
 // =========================
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
-
   if (!session?.access_token) return;
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
@@ -194,7 +217,7 @@ function renderRegistrations(data) {
 
     let html = `
       <b>${date}</b>
-      ${holiday ? `<div style="color:#fbbf24;font-size:16px;"> ${holiday}</div>` : ""}
+      ${holiday ? `<div style="color:#fbbf24;font-size:14px;">🎉 ${holiday}</div>` : ""}
       <br><br>
     `;
 
@@ -202,7 +225,8 @@ function renderRegistrations(data) {
       const booked = (grouped[date] || []).find(x => x.time === time);
 
       html += `
-        <div class="slot ${booked ? "selected" : ""}">
+        <div class="slot ${booked ? "selected" : ""}"
+             onclick="${booked ? "" : `toggleSlot('${date}','${time}', this)`}">
           ${time} ${booked ? " - " + booked.name : ""}
         </div>
       `;
@@ -304,7 +328,6 @@ async function checkSession() {
     authBox.style.display = "none";
     appBox.style.display = "block";
     userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
-
     fetchRegistrations();
   } else {
     authBox.style.display = "block";
@@ -317,14 +340,7 @@ async function checkSession() {
 // INIT
 // =========================
 window.addEventListener("load", async () => {
-  await loadHolidays(2026); // 🇮🇱 IMPORTANT
-
-  const { data } = await client.auth.getSession();
-
-  if (data.session) {
-    console.log("SESSION RESTORED", data.session);
-  }
-
+  await loadHolidays(2026);
   checkSession();
 });
 
