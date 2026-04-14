@@ -35,7 +35,6 @@ input {
 }
 
 button {
-  width: 100%;
   margin-top: 10px;
   padding: 12px;
   border: none;
@@ -49,19 +48,26 @@ button {
 
 .slot {
   background: #475569;
-  padding: 8px;
+  padding: 10px;
   margin-top: 6px;
   border-radius: 8px;
   cursor: pointer;
-  transition: 0.2s;
-}
-
-.slot:hover {
-  opacity: 0.85;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .slot.selected {
   background: #22c55e;
+}
+
+.delete-btn {
+  background: #ef4444;
+  border: none;
+  color: white;
+  border-radius: 6px;
+  padding: 4px 8px;
+  cursor: pointer;
 }
 
 #loader {
@@ -113,70 +119,62 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true,
-  },
-});
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selected = [];
 let holidaysMap = {};
 
 // =========================
-// 🇮🇱 HOLIDAYS (Hebcal)
+// DELETE REGISTRATION
 // =========================
-async function loadHolidays(year = 2026) {
-  try {
-    const res = await fetch(
-      `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on&mod=on&nx=on`
-    );
+async function deleteRegistration(id) {
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return alert("צריך להתחבר");
 
-    const data = await res.json();
-    const map = {};
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ id }),
+  });
 
-    data.items.forEach(item => {
-      if (!item.date || !item.title) return;
-      const date = item.date.split("T")[0];
-      map[date] = item.title;
-    });
+  const data = await res.json();
 
-    holidaysMap = map;
-
-  } catch (err) {
-    console.error("Holiday API failed", err);
+  if (!res.ok) {
+    return alert(data.error);
   }
+
+  alert("נמחק בהצלחה 🗑️");
+  fetchRegistrations();
 }
 
 // =========================
-// 🎯 SLOT CLICK LOGIC (FIX)
+// TOGGLE SLOT
 // =========================
 function toggleSlot(date, time, el) {
   const key = `${date}|${time}`;
 
-  const index = selected.indexOf(key);
-
-  if (index > -1) {
-    selected.splice(index, 1);
+  const i = selected.indexOf(key);
+  if (i > -1) {
+    selected.splice(i, 1);
     el.classList.remove("selected");
   } else {
     selected.push(key);
     el.classList.add("selected");
   }
-
-  console.log("Selected:", selected);
 }
 
 // =========================
-// 📦 FETCH REGISTRATIONS
+// FETCH REGISTRATIONS
 // =========================
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
-  if (!session?.access_token) return;
+  if (!session) return;
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
-    method: "GET",
     headers: {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${session.access_token}`,
@@ -184,16 +182,13 @@ async function fetchRegistrations() {
   });
 
   const data = await res.json();
-
-  if (res.ok) {
-    renderRegistrations(data);
-  }
+  if (res.ok) render(data);
 }
 
 // =========================
-// 🎾 RENDER UI
+// RENDER
 // =========================
-function renderRegistrations(data) {
+function render(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
 
@@ -210,26 +205,28 @@ function renderRegistrations(data) {
     d.setDate(d.getDate() + i);
     let date = d.toISOString().split("T")[0];
 
-    const holiday = holidaysMap[date];
-
     const card = document.createElement("div");
     card.className = "card";
 
-    let html = `
-      <b>${date}</b>
-      ${holiday ? `<div style="color:#fbbf24;font-size:14px;">📅 ${holiday}</div>` : ""}
-      <br><br>
-    `;
+    let html = `<b>${date}</b><br><br>`;
 
     times.forEach(time => {
       const booked = (grouped[date] || []).find(x => x.time === time);
 
-      html += `
-        <div class="slot ${booked ? "selected" : ""}"
-             onclick="${booked ? "" : `toggleSlot('${date}','${time}', this)`}">
-          ${time} ${booked ? " - " + booked.name : ""}
-        </div>
-      `;
+      if (booked) {
+        html += `
+          <div class="slot">
+            <span>${time} - ${booked.name}</span>
+            <button class="delete-btn" onclick="deleteRegistration('${booked.id}')">🗑️</button>
+          </div>
+        `;
+      } else {
+        html += `
+          <div class="slot" onclick="toggleSlot('${date}','${time}',this)">
+            ${time}
+          </div>
+        `;
+      }
     });
 
     card.innerHTML = html;
@@ -238,60 +235,29 @@ function renderRegistrations(data) {
 }
 
 // =========================
-// 🔐 LOGIN
+// LOGIN
 // =========================
 async function login() {
-  const email = document.getElementById("email").value.trim().toLowerCase();
-  const loader = document.getElementById("loader");
-  const errorBox = document.getElementById("errorBox");
+  const email = document.getElementById("email").value;
 
-  loader.style.display = "block";
-  errorBox.innerText = "";
+  await client.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.href }
+  });
 
-  try {
-    const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ email }),
-    });
-
-    const data = await res.json();
-
-    if (!res.ok || !data.allowed) {
-      throw new Error("האימייל לא מורשה");
-    }
-
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: { emailRedirectTo: window.location.href },
-    });
-
-    if (error) throw error;
-
-    alert("נשלח מייל 📧");
-
-  } catch (err) {
-    errorBox.innerText = err.message;
-  }
-
-  loader.style.display = "none";
+  alert("נשלח מייל 📧");
 }
 
 // =========================
-// 📝 SUBMIT
+// SUBMIT
 // =========================
 async function submitForm() {
-  const name = document.getElementById("name").value.trim();
+  const name = document.getElementById("name").value;
   const { data: { session } } = await client.auth.getSession();
 
   if (!session) return alert("צריך להתחבר");
-  if (!name || selected.length === 0) return alert("בחר שם ושעות");
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+  await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -301,51 +267,17 @@ async function submitForm() {
     body: JSON.stringify({ name, slots: selected }),
   });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    return alert(data.error);
-  }
-
-  alert("נרשמת בהצלחה 🎾");
-
+  alert("נרשמת 🎾");
   selected = [];
   fetchRegistrations();
-}
-
-// =========================
-// 🔄 SESSION
-// =========================
-async function checkSession() {
-  const { data: { session } } = await client.auth.getSession();
-  const user = session?.user;
-
-  const authBox = document.getElementById("authBox");
-  const appBox = document.getElementById("appBox");
-  const userBox = document.getElementById("userBox");
-
-  if (user) {
-    authBox.style.display = "none";
-    appBox.style.display = "block";
-    userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
-    fetchRegistrations();
-  } else {
-    authBox.style.display = "block";
-    appBox.style.display = "none";
-    userBox.innerHTML = "";
-  }
 }
 
 // =========================
 // INIT
 // =========================
 window.addEventListener("load", async () => {
-  await loadHolidays(2026);
-  checkSession();
-});
-
-client.auth.onAuthStateChange(() => {
-  checkSession();
+  const { data } = await client.auth.getSession();
+  if (data.session) fetchRegistrations();
 });
 </script>
 
