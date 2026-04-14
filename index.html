@@ -52,6 +52,7 @@ button {
   padding: 8px;
   margin-top: 6px;
   border-radius: 8px;
+  cursor: pointer;
 }
 
 .slot.selected {
@@ -121,22 +122,16 @@ let selected = [];
 // 📦 FETCH REGISTRATIONS
 // =========================
 async function fetchRegistrations() {
-const { data: { session } } = await client.auth.getSession();
+  const { data: { session } } = await client.auth.getSession();
+  if (!session?.access_token) return;
 
-if (!session?.access_token) {
-  console.log("No session yet");
-  return;
-}
-
-const token = session.access_token;
-
-const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
-  method: "GET",
-  headers: {
-    apikey: SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${token}`,
-  },
-});
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    method: "GET",
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+  });
 
   const data = await res.json();
 
@@ -146,7 +141,7 @@ const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
 }
 
 // =========================
-// 🎾 RENDER UI
+// 🎾 RENDER UI (FIXED CLICK HANDLING)
 // =========================
 function renderRegistrations(data) {
   const container = document.getElementById("days");
@@ -168,19 +163,41 @@ function renderRegistrations(data) {
     const card = document.createElement("div");
     card.className = "card";
 
-    let html = `<b>${date}</b><br><br>`;
+    const title = document.createElement("b");
+    title.innerText = date;
+    card.appendChild(title);
+
+    card.appendChild(document.createElement("br"));
+    card.appendChild(document.createElement("br"));
 
     times.forEach(time => {
       const booked = (grouped[date] || []).find(x => x.time === time);
 
-      html += `
-        <div class="slot ${booked ? "selected" : ""}">
-          ${time} ${booked ? " - " + booked.name : ""}
-        </div>
-      `;
+      const slot = document.createElement("div");
+      slot.className = "slot";
+
+      const key = `${date}|${time}`;
+
+      slot.innerText = booked ? `${time} - ${booked.name}` : time;
+
+      if (!booked) {
+        slot.onclick = () => {
+          if (selected.includes(key)) {
+            selected = selected.filter(x => x !== key);
+            slot.classList.remove("selected");
+          } else {
+            selected.push(key);
+            slot.classList.add("selected");
+          }
+        };
+      } else {
+        slot.style.opacity = "0.6";
+        slot.style.cursor = "not-allowed";
+      }
+
+      card.appendChild(slot);
     });
 
-    card.innerHTML = html;
     container.appendChild(card);
   }
 }
@@ -265,8 +282,8 @@ async function submitForm() {
 // 🔄 SESSION
 // =========================
 async function checkSession() {
-const { data: { session } } = await client.auth.getSession();
-const user = session?.user;
+  const { data: { session } } = await client.auth.getSession();
+  const user = session?.user;
 
   const authBox = document.getElementById("authBox");
   const appBox = document.getElementById("appBox");
@@ -276,7 +293,6 @@ const user = session?.user;
     authBox.style.display = "none";
     appBox.style.display = "block";
     userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
-
     fetchRegistrations();
   } else {
     authBox.style.display = "block";
@@ -289,21 +305,11 @@ const user = session?.user;
 // INIT
 // =========================
 window.addEventListener("load", async () => {
-  // 🔥 wait for Supabase to restore session properly
-  const { data, error } = await client.auth.getSession();
-
-  if (data.session) {
-    console.log("SESSION RESTORED", data.session);
-  } else {
-    console.log("NO SESSION FOUND");
-  }
-
-  // build UI only after session is checked
+  await client.auth.getSession();
   checkSession();
 });
 
-// 🔥 keep auth listener for login/logout changes
-client.auth.onAuthStateChange((_event, session) => {
+client.auth.onAuthStateChange(() => {
   checkSession();
 });
 </script>
