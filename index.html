@@ -123,15 +123,20 @@ let selected = [];
 async function fetchRegistrations() {
 const { data: { session } } = await client.auth.getSession();
 
-if (!session?.access_token) return;
+if (!session?.access_token) {
+  console.log("No session yet");
+  return;
+}
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
-    method: "GET",
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-    },
-  });
+const token = session.access_token;
+
+const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+  method: "GET",
+  headers: {
+    apikey: SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${token}`,
+  },
+});
 
   const data = await res.json();
 
