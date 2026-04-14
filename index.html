@@ -124,7 +124,7 @@ let holidaysMap = {};
 async function loadHolidays(year = 2026) {
   try {
     const res = await fetch(
-      `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on`
+       `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on&mod=on&nx=on`
     );
 
     const data = await res.json();
