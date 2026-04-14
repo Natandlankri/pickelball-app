@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="he">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>פיקלבול בת חפר 🎾</title>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>פיקלבול 🎾</title>
 
 <style>
 body {
@@ -52,39 +52,23 @@ button {
   padding: 8px;
   margin-top: 6px;
   border-radius: 8px;
-  display:flex;
-  justify-content: space-between;
-  align-items:center;
-  cursor:pointer;
 }
 
 .slot.selected {
   background: #22c55e;
 }
 
-.slot.booked {
-  background: #334155;
-  cursor: default;
+#loader {
+  display: none;
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 5px;
 }
 
-.remove {
-  background: transparent;
-  border: none;
-  color: #ef4444;
-  font-size: 16px;
-  cursor: pointer;
-}
-
-#toast {
-  position: fixed;
-  bottom: 20px;
-  left: 50%;
-  transform: translateX(-50%);
-  background: #111827;
-  color: white;
-  padding: 10px 14px;
-  border-radius: 10px;
-  display:none;
+#userBox {
+  margin-top: 10px;
+  font-size: 14px;
+  opacity: 0.9;
 }
 </style>
 </head>
@@ -93,23 +77,27 @@ button {
 
 <div class="container">
 
-<h1>🎾 פיקלבול בת חפר</h1>
+  <h1>🎾 פיקלבול</h1>
 
-<div class="card" id="authBox">
-  <input id="email" placeholder="אימייל להתחברות"/>
-  <button class="login" onclick="login()">🔐 התחבר</button>
-</div>
-
-<div id="appBox" style="display:none;">
-  <div class="card">
-    <input id="name" placeholder="שם מלא"/>
-    <button class="primary" onclick="submitForm()">הרשמה</button>
+  <!-- AUTH -->
+  <div class="card" id="authBox">
+    <input id="email" placeholder="אימייל להתחברות">
+    <button class="login" onclick="login()">🔐 התחבר</button>
+    <div id="loader">בודק הרשאה...</div>
+    <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
   </div>
 
-  <div id="days"></div>
-</div>
+  <!-- APP -->
+  <div id="appBox" style="display:none;">
+    <div class="card">
+      <input id="name" placeholder="שם מלא">
+      <button class="primary" onclick="submitForm()">הרשמה</button>
+    </div>
 
-<div id="toast"></div>
+    <div id="days"></div>
+  </div>
+
+  <div id="userBox"></div>
 
 </div>
 
@@ -119,50 +107,70 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
 
 let selected = [];
-let lastData = [];
+let holidaysMap = {};
 
-// ================= TOAST =================
-function toast(msg) {
-  const t = document.getElementById("toast");
-  t.innerText = msg;
-  t.style.display = "block";
-  setTimeout(() => t.style.display = "none", 2500);
+// =========================
+// 🇮🇱 LOAD ISRAEL HOLIDAYS (Hebcal API)
+// =========================
+async function loadHolidays(year = 2026) {
+  try {
+    const res = await fetch(
+      `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on`
+    );
+
+    const data = await res.json();
+    const map = {};
+
+    data.items.forEach(item => {
+      if (!item.date || !item.title) return;
+      const date = item.date.split("T")[0];
+      map[date] = item.title;
+    });
+
+    holidaysMap = map;
+    console.log("HOLIDAYS LOADED", holidaysMap);
+
+  } catch (err) {
+    console.error("Holiday API failed", err);
+  }
 }
 
-// ================= AUTH =================
-async function login() {
-  const email = document.getElementById("email").value;
-
-  await client.auth.signInWithOtp({
-    email,
-    options: { emailRedirectTo: window.location.href }
-  });
-
-  toast("נשלח מייל התחברות 📧");
-}
-
-// ================= FETCH =================
+// =========================
+// 📦 FETCH REGISTRATIONS
+// =========================
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
-  if (!session) return;
+
+  if (!session?.access_token) return;
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    method: "GET",
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    }
+      Authorization: `Bearer ${session.access_token}`,
+    },
   });
 
   const data = await res.json();
-  lastData = data;
-  render(data);
+
+  if (res.ok) {
+    renderRegistrations(data);
+  }
 }
 
-// ================= RENDER =================
-function render(data) {
+// =========================
+// 🎾 RENDER UI
+// =========================
+function renderRegistrations(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
 
@@ -175,36 +183,29 @@ function render(data) {
   });
 
   for (let i = 1; i <= 7; i++) {
-    const d = new Date();
+    let d = new Date();
     d.setDate(d.getDate() + i);
-    const date = d.toISOString().split("T")[0];
+    let date = d.toISOString().split("T")[0];
+
+    const holiday = holidaysMap[date];
 
     const card = document.createElement("div");
     card.className = "card";
 
-    let html = `<b>${date}</b><br><br>`;
+    let html = `
+      <b>${date}</b>
+      ${holiday ? `<div style="color:#fbbf24;font-size:12px;">🎉 ${holiday}</div>` : ""}
+      <br><br>
+    `;
 
     times.forEach(time => {
-      const booking = (grouped[date] || []).find(x => x.time === time);
+      const booked = (grouped[date] || []).find(x => x.time === time);
 
-      if (booking) {
-        html += `
-          <div class="slot booked">
-            <span>${time} - ${booking.name}</span>
-            <button class="remove" onclick="removeBooking('${booking.id}')">✖</button>
-          </div>
-        `;
-      } else {
-        const key = `${date}|${time}`;
-        const isSelected = selected.includes(key);
-
-        html += `
-          <div class="slot ${isSelected ? "selected" : ""}"
-               onclick="toggleSlot('${date}','${time}')">
-            ${time}
-          </div>
-        `;
-      }
+      html += `
+        <div class="slot ${booked ? "selected" : ""}">
+          ${time} ${booked ? " - " + booked.name : ""}
+        </div>
+      `;
     });
 
     card.innerHTML = html;
@@ -212,83 +213,123 @@ function render(data) {
   }
 }
 
-// ================= SELECT =================
-function toggleSlot(date, time) {
-  const key = `${date}|${time}`;
+// =========================
+// 🔐 LOGIN
+// =========================
+async function login() {
+  const email = document.getElementById("email").value.trim().toLowerCase();
+  const loader = document.getElementById("loader");
+  const errorBox = document.getElementById("errorBox");
 
-  if (selected.includes(key)) {
-    selected = selected.filter(x => x !== key);
-  } else {
-    selected.push(key);
+  loader.style.display = "block";
+  errorBox.innerText = "";
+
+  try {
+    const res = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const data = await res.json();
+
+    if (!res.ok || !data.allowed) {
+      throw new Error("האימייל לא מורשה");
+    }
+
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: { emailRedirectTo: window.location.href },
+    });
+
+    if (error) throw error;
+
+    alert("נשלח מייל 📧");
+
+  } catch (err) {
+    errorBox.innerText = err.message;
   }
 
-  render(lastData);
+  loader.style.display = "none";
 }
 
-// ================= CREATE =================
+// =========================
+// 📝 SUBMIT
+// =========================
 async function submitForm() {
-  const name = document.getElementById("name").value;
+  const name = document.getElementById("name").value.trim();
   const { data: { session } } = await client.auth.getSession();
 
-  if (!session) return toast("צריך להתחבר");
-  if (!name || selected.length === 0) return toast("בחר שם ושעות");
+  if (!session) return alert("צריך להתחבר");
+  if (!name || selected.length === 0) return alert("בחר שם ושעות");
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
+      Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ name, slots: selected })
+    body: JSON.stringify({ name, slots: selected }),
   });
 
   const data = await res.json();
 
-  if (!res.ok) return toast(data.error || "שגיאה");
+  if (!res.ok) {
+    return alert(data.error);
+  }
+
+  alert("נרשמת בהצלחה 🎾");
 
   selected = [];
-  toast("נרשמת בהצלחה 🎾");
   fetchRegistrations();
 }
 
-// ================= DELETE =================
-async function removeBooking(id) {
-  if (!id) return toast("Missing id");
-
+// =========================
+// 🔄 SESSION
+// =========================
+async function checkSession() {
   const { data: { session } } = await client.auth.getSession();
+  const user = session?.user;
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ id })
-  });
+  const authBox = document.getElementById("authBox");
+  const appBox = document.getElementById("appBox");
+  const userBox = document.getElementById("userBox");
 
-  const data = await res.json();
+  if (user) {
+    authBox.style.display = "none";
+    appBox.style.display = "block";
+    userBox.innerHTML = `<p>מחובר כ: <b>${user.email}</b></p>`;
 
-  if (!res.ok) return toast(data.error || "מחיקה נכשלה");
-
-  toast("נמחק בהצלחה 🗑️");
-  fetchRegistrations();
+    fetchRegistrations();
+  } else {
+    authBox.style.display = "block";
+    appBox.style.display = "none";
+    userBox.innerHTML = "";
+  }
 }
 
-// ================= INIT =================
+// =========================
+// INIT
+// =========================
 window.addEventListener("load", async () => {
+  await loadHolidays(2026); // 🇮🇱 IMPORTANT
+
   const { data } = await client.auth.getSession();
 
   if (data.session) {
-    document.getElementById("authBox").style.display = "none";
-    document.getElementById("appBox").style.display = "block";
-    fetchRegistrations();
+    console.log("SESSION RESTORED", data.session);
   }
+
+  checkSession();
 });
 
 client.auth.onAuthStateChange(() => {
-  fetchRegistrations();
+  checkSession();
 });
 </script>
 
