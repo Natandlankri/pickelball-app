@@ -102,7 +102,13 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true, // ✅ FIXED
+  },
+});
 
 let selected = [];
 let holidaysMap = {};
@@ -130,20 +136,28 @@ async function loadHolidays() {
 
     holidaysMap = map;
 
-    console.log("HOLIDAYS:", holidaysMap);
-
   } catch (err) {
     console.error("Holiday error", err);
   }
 }
 
 // =========================
-// INIT
+// INIT (🔥 FIXED MAGIC LINK)
 // =========================
 window.addEventListener("load", async () => {
-  await loadHolidays();
 
+  // 🔥 handle magic link (cross device fix)
   const { data } = await client.auth.getSession();
+
+  if (window.location.hash.includes("access_token")) {
+    console.log("Magic link detected");
+
+    if (data.session) {
+      window.location.hash = ""; // clean URL
+    }
+  }
+
+  await loadHolidays();
 
   if (data.session) {
     showApp();
@@ -170,14 +184,16 @@ function showApp() {
 }
 
 // =========================
-// LOGIN
+// LOGIN (IMPORTANT FIX)
 // =========================
 async function login() {
   const email = document.getElementById("email").value;
 
   await client.auth.signInWithOtp({
     email,
-    options: { emailRedirectTo: window.location.href }
+    options: {
+      emailRedirectTo: window.location.origin // ✅ FIXED
+    }
   });
 
   alert("נשלח מייל 📧");
@@ -201,7 +217,7 @@ function toggleSlot(date, time, el) {
 }
 
 // =========================
-// FETCH
+// FETCH REGISTRATIONS
 // =========================
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
@@ -234,6 +250,41 @@ async function deleteRegistration(id) {
     body: JSON.stringify({ id })
   });
 
+  alert("נמחק בהצלחה ❌");
+
+  fetchRegistrations();
+}
+
+// =========================
+// SUBMIT
+// =========================
+async function submitForm() {
+  const name = document.getElementById("name").value;
+  const { data: { session } } = await client.auth.getSession();
+
+  if (!name || selected.length === 0) {
+    return alert("בחר שם ושעות");
+  }
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`
+    },
+    body: JSON.stringify({ name, slots: selected })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    return alert(data.error);
+  }
+
+  alert("נרשמת בהצלחה 🎾");
+
+  selected = [];
   fetchRegistrations();
 }
 
