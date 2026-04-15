@@ -26,7 +26,7 @@ body {
   margin-bottom: 15px;
 }
 
-/* FIXED INPUT WIDTH */
+/* FIXED INPUT WIDTH (unchanged) */
 input {
   width: 100%;
   box-sizing: border-box;
@@ -55,10 +55,6 @@ button {
   margin-top: 6px;
   border-radius: 8px;
   cursor: pointer;
-}
-
-.slot.selected {
-  background: #22c55e;
 }
 
 #userBox {
@@ -120,25 +116,7 @@ async function loadHolidays(year = 2026) {
   });
 }
 
-// ================= FETCH =================
-async function fetchRegistrations() {
-  const { data: { session } } = await client.auth.getSession();
-  if (!session) return;
-
-  currentUserId = session.user.id;
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-    }
-  });
-
-  const data = await res.json();
-  renderRegistrations(data);
-}
-
-// ================= DELETE =================
+// ================= DELETE (WITH TOAST) =================
 async function deleteRegistration(id) {
   const { data: { session } } = await client.auth.getSession();
 
@@ -159,7 +137,45 @@ async function deleteRegistration(id) {
     return;
   }
 
+  // ✅ toast message
+  const toast = document.createElement("div");
+  toast.innerText = "✔ הוסר בהצלחה";
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #22c55e;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    z-index: 9999;
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 2000);
+
   fetchRegistrations();
+}
+
+// ================= FETCH =================
+async function fetchRegistrations() {
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return;
+
+  currentUserId = session.user.id;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    }
+  });
+
+  const data = await res.json();
+  renderRegistrations(data);
 }
 
 // ================= RENDER =================
@@ -201,17 +217,25 @@ function renderRegistrations(data) {
           <b>${time}</b>
 
           <div style="margin-top:6px;font-size:13px;opacity:0.9">
+
             ${
               bookings.length
                 ? bookings.map(b => `
-                    <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
                       <span>👤 ${b.name}</span>
 
                       ${b.user_id === currentUserId ? `
                         <button onclick="deleteRegistration('${b.id}')"
-                          style="background:red;color:white;border:none;
-                                 border-radius:6px;padding:2px 6px;
-                                 cursor:pointer;font-size:12px">
+                          style="
+                            background:#ef4444;
+                            color:white;
+                            border:none;
+                            border-radius:6px;
+                            padding:1px 6px;
+                            font-size:10px;
+                            cursor:pointer;
+                            line-height:1;
+                          ">
                           ❌
                         </button>
                       ` : ""}
@@ -219,6 +243,7 @@ function renderRegistrations(data) {
                   `).join("")
                 : "זמין"
             }
+
           </div>
 
         </div>
