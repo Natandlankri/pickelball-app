@@ -122,11 +122,13 @@ async function loadHolidays(year = 2026) {
 
   data.items.forEach(item => {
     if (item.category === "holiday" && item.date) {
-      const key = item.date.substring(0, 10);
+      const key = item.date.trim().substring(0, 10);
       if (!holidaysMap[key]) holidaysMap[key] = [];
       holidaysMap[key].push(item.title);
     }
   });
+
+  console.log("HOLIDAYS LOADED:", holidaysMap);
 }
 
 // ================= FETCH =================
@@ -202,11 +204,11 @@ function renderRegistrations(data) {
     let d = new Date();
     d.setDate(d.getDate() + i);
 
-    const date = new Date(
-      d.getTime() - d.getTimezoneOffset() * 60000
-    ).toISOString().split("T")[0];
+    // ✅ stable ISO date (NO timezone bugs)
+    const date = d.toLocaleDateString("en-CA");
 
     const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
+
     const holiday = holidaysMap[date];
 
     const card = document.createElement("div");
