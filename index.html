@@ -1,4 +1,5 @@
 <!DOCTYPE html>
+
 <html lang="he">
 <head>
 <meta charset="UTF-8">
@@ -26,8 +27,6 @@ body {
   margin-bottom: 15px;
 }
 
-/* FIXED INPUT WIDTH */
-/* FIXED INPUT WIDTH (unchanged) */
 input {
   width: 100%;
   box-sizing: border-box;
@@ -55,11 +54,6 @@ button {
   padding: 10px;
   margin-top: 6px;
   border-radius: 8px;
-  cursor: pointer;
-}
-
-.slot.selected {
-  background: #22c55e;
 }
 
 #userBox {
@@ -68,6 +62,7 @@ button {
   opacity: 0.9;
 }
 </style>
+
 </head>
 
 <body dir="rtl">
@@ -77,6 +72,7 @@ button {
   <h1>🎾 פיקלבול בת חפר</h1>
 
   <!-- AUTH -->
+
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
@@ -84,13 +80,17 @@ button {
   </div>
 
   <!-- APP -->
+
   <div id="appBox" style="display:none;">
     <div class="card">
       <input id="name" placeholder="שם מלא">
       <button class="primary" onclick="submitForm()">הרשמה</button>
     </div>
 
-    <div id="days"></div>
+```
+<div id="days"></div>
+```
+
   </div>
 
   <div id="userBox"></div>
@@ -101,7 +101,7 @@ button {
 
 <script>
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
+const SUPABASE_ANON_KEY = "YOUR_KEY_HERE";
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
@@ -111,12 +111,19 @@ let holidaysMap = {};
 
 // ================= HOLIDAYS =================
 async function loadHolidays(year = 2026) {
-  const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he`);
+  const res = await fetch(
+    `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on`
+  );
+
   const data = await res.json();
+
+  holidaysMap = {};
 
   data.items.forEach(item => {
     if (item.date) {
-      holidaysMap[item.date.split("T")[0]] = item.title;
+      const key = item.date.split("T")[0];
+      if (!holidaysMap[key]) holidaysMap[key] = [];
+      holidaysMap[key].push(item.title);
     }
   });
 }
@@ -140,7 +147,6 @@ async function fetchRegistrations() {
 }
 
 // ================= DELETE =================
-// ================= DELETE (WITH TOAST) =================
 async function deleteRegistration(id) {
   const { data: { session } } = await client.auth.getSession();
 
@@ -154,52 +160,9 @@ async function deleteRegistration(id) {
     body: JSON.stringify({ id })
   });
 
-  const data = await res.json();
-
-  if (!res.ok) {
-    alert(data.error);
-    return;
-  }
-
-  // ✅ toast message
-  const toast = document.createElement("div");
-  toast.innerText = "✔ הוסר בהצלחה";
-  toast.style.cssText = `
-    position: fixed;
-    bottom: 20px;
-    left: 50%;
-    transform: translateX(-50%);
-    background: #22c55e;
-    color: white;
-    padding: 10px 14px;
-    border-radius: 10px;
-    font-size: 14px;
-    z-index: 9999;
-  `;
-
-  document.body.appendChild(toast);
-
-  setTimeout(() => toast.remove(), 2000);
+  if (!res.ok) return;
 
   fetchRegistrations();
-}
-
-// ================= FETCH =================
-async function fetchRegistrations() {
-  const { data: { session } } = await client.auth.getSession();
-  if (!session) return;
-
-  currentUserId = session.user.id;
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`,
-    }
-  });
-
-  const data = await res.json();
-  renderRegistrations(data);
 }
 
 // ================= RENDER =================
@@ -218,62 +181,50 @@ function renderRegistrations(data) {
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
-    let date = d.toISOString().split("T")[0];
 
+    // ✅ Correct date handling
+    let date = d.toLocaleDateString("en-CA");
+    const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
     const holiday = holidaysMap[date];
 
     const card = document.createElement("div");
     card.className = "card";
 
     let html = `
-      <b>${date}</b>
-      ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
+      <b>${hebrewDay} - ${date}</b>
+      ${
+        holiday
+          ? `<div style="color:#fbbf24;font-weight:bold">📅 ${holiday.join(" | ")}</div>`
+          : ""
+      }
       <br><br>
     `;
 
     times.forEach(time => {
-
       const bookings = (grouped[date] || []).filter(x => x.time === time);
 
       html += `
         <div class="slot">
-
           <b>${time}</b>
-
           <div style="margin-top:6px;font-size:13px;opacity:0.9">
-
             ${
               bookings.length
                 ? bookings.map(b => `
-                    <div style="display:flex;justify-content:space-between;align-items:center">
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                    <div style="display:flex;justify-content:space-between">
                       <span>👤 ${b.name}</span>
-
-                      ${b.user_id === currentUserId ? `
-                        <button onclick="deleteRegistration('${b.id}')"
-                          style="background:red;color:white;border:none;
-                                 border-radius:6px;padding:2px 6px;
-                                 cursor:pointer;font-size:12px">
-                          style="
-                            background:#ef4444;
-                            color:white;
-                            border:none;
-                            border-radius:6px;
-                            padding:1px 6px;
-                            font-size:10px;
-                            cursor:pointer;
-                            line-height:1;
-                          ">
-                          ❌
-                        </button>
-                      ` : ""}
+                      ${
+                        b.user_id === currentUserId
+                          ? `<button onclick="deleteRegistration('${b.id}')"
+                              style="background:red;color:white;border:none;border-radius:6px;padding:2px 6px;font-size:12px">
+                              ❌
+                             </button>`
+                          : ""
+                      }
                     </div>
                   `).join("")
                 : "זמין"
             }
-
           </div>
-
         </div>
       `;
     });
@@ -318,9 +269,7 @@ async function submitForm() {
     })
   });
 
-  const data = await res.json();
-
-  if (!res.ok) return alert(data.error);
+  if (!res.ok) return;
 
   selected = [];
   fetchRegistrations();
