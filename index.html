@@ -26,8 +26,10 @@ body {
   margin-bottom: 15px;
 }
 
+/* ✅ FIXED INPUT WIDTH */
 input {
   width: 100%;
+  box-sizing: border-box;
   padding: 12px;
   margin: 8px 0;
   border-radius: 10px;
@@ -52,6 +54,11 @@ button {
   padding: 10px;
   margin-top: 6px;
   border-radius: 8px;
+  cursor: pointer;
+}
+
+.slot.selected {
+  background: #22c55e;
 }
 
 #loader {
@@ -75,6 +82,7 @@ button {
 
   <h1>🎾 פיקלבול בת חפר</h1>
 
+  <!-- AUTH -->
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
@@ -82,6 +90,7 @@ button {
     <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
   </div>
 
+  <!-- APP -->
   <div id="appBox" style="display:none;">
     <div class="card">
       <input id="name" placeholder="שם מלא">
@@ -106,7 +115,7 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 let selected = [];
 let holidaysMap = {};
 
-// ---------------- HOLIDAYS ----------------
+// ================= HOLIDAYS =================
 async function loadHolidays(year = 2026) {
   const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he`);
   const data = await res.json();
@@ -118,7 +127,7 @@ async function loadHolidays(year = 2026) {
   });
 }
 
-// ---------------- FETCH ----------------
+// ================= FETCH =================
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return;
@@ -134,7 +143,7 @@ async function fetchRegistrations() {
   renderRegistrations(data);
 }
 
-// ---------------- FIXED RENDER ----------------
+// ================= RENDER (FIXED) =================
 function renderRegistrations(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
@@ -165,11 +174,14 @@ function renderRegistrations(data) {
 
     times.forEach(time => {
 
-      // ✅ FIX: allow multiple users per slot
       const bookings = (grouped[date] || []).filter(x => x.time === time);
 
+      const key = `${date}|${time}`;
+      const isSelected = selected.includes(key);
+
       html += `
-        <div class="slot">
+        <div class="slot ${isSelected ? "selected" : ""}"
+             onclick="toggleSlot('${date}','${time}', this)">
           <b>${time}</b>
           <div style="font-size:13px;opacity:0.9;margin-top:5px">
             ${
@@ -187,7 +199,22 @@ function renderRegistrations(data) {
   }
 }
 
-// ---------------- LOGIN ----------------
+// ================= SLOT TOGGLE (FIXED) =================
+function toggleSlot(date, time, el) {
+  const key = `${date}|${time}`;
+
+  const index = selected.indexOf(key);
+
+  if (index > -1) {
+    selected.splice(index, 1);
+    el.classList.remove("selected");
+  } else {
+    selected.push(key);
+    el.classList.add("selected");
+  }
+}
+
+// ================= LOGIN =================
 async function login() {
   const email = document.getElementById("email").value;
 
@@ -202,9 +229,10 @@ async function login() {
   else alert("נשלח מייל 📧");
 }
 
-// ---------------- SUBMIT ----------------
+// ================= SUBMIT =================
 async function submitForm() {
   const name = document.getElementById("name").value;
+
   const { data: { session } } = await client.auth.getSession();
 
   if (!session) return alert("צריך להתחבר");
@@ -230,7 +258,7 @@ async function submitForm() {
   fetchRegistrations();
 }
 
-// ---------------- SESSION ----------------
+// ================= SESSION =================
 async function checkSession() {
   const { data: { session } } = await client.auth.getSession();
 
