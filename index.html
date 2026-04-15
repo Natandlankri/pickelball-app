@@ -360,13 +360,17 @@ function render(data) {
     let d = new Date();
     d.setDate(d.getDate() + i);
 
-    const date = d.toISOString().split("T")[0];
-    const holiday = holidaysMap[date];
+const date = d.toISOString().split("T")[0];
+const holiday = holidaysMap[date];
 
-    const card = document.createElement("div");
-    card.className = "card";
+const dObj = new Date(date);
+const dayName = dObj.toLocaleDateString("he-IL", { weekday: "long" });
+const shortDate = dObj.toLocaleDateString("he-IL");
 
-    let html = `<b>${date}</b>`;
+const card = document.createElement("div");
+card.className = "card";
+
+let html = `<b>${dayName} - ${shortDate}</b>`;
 
     if (holiday) {
       html += `<div style="color:#fbbf24;">📅 ${holiday}</div>`;
