@@ -127,8 +127,8 @@ async function loadHolidays(year = 2026) {
 
   (data.items || []).forEach(item => {
     if (item?.date && item?.category === "holiday") {
-      const key = item.date.substring(0, 10);
-      holidaysMap[key] = item.title;
+      const key = item.date.slice(0, 10);
+      holidaysMap[key] = item.hebrew || item.title;
     }
   });
 }
