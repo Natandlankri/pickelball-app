@@ -55,29 +55,17 @@ button {
   border-radius: 8px;
 }
 
-.booking-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 10px;
-  padding: 2px 0;
+.slot.selected {
+  background: #22c55e;
 }
 
-.booking-row .name {
-  flex: 1;
-}
 .booking-row {
   display: flex;
   align-items: center;
-  gap: 6px;          /* small spacing */
-  padding: 2px 0;
+  gap: 6px;
+  margin-top: 2px;
 }
 
-.booking-row .name {
-  display: inline-block;
-}
-
-/* trash icon stays right next to name */
 .booking-row button {
   background: transparent;
   border: none;
@@ -85,7 +73,6 @@ button {
   cursor: pointer;
   font-size: 15px;
   padding: 0;
-  margin: 0;
   line-height: 1;
 }
 </style>
@@ -123,7 +110,7 @@ const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-let selected = [];
+let selected = new Set();
 let holidaysMap = {};
 let currentUserId = null;
 
@@ -133,11 +120,9 @@ async function loadHolidays(year = 2026) {
   const data = await res.json();
 
   holidaysMap = {};
-
   (data.items || []).forEach(item => {
     if (item?.date && item?.category === "holiday") {
-      const key = item.date.slice(0, 10);
-      holidaysMap[key] = item.hebrew || item.title;
+      holidaysMap[item.date.slice(0,10)] = item.hebrew || item.title;
     }
   });
 }
@@ -192,31 +177,34 @@ function renderRegistrations(data) {
     `;
 
     times.forEach(time => {
+      const key = `${date}|${time}`;
+      const isSelected = selected.has(key);
       const bookings = (grouped[date] || []).filter(x => x.time === time);
 
       html += `
-        <div class="slot">
+        <div class="slot ${isSelected ? "selected" : ""}"
+             onclick="toggleSlot('${date}','${time}')">
+
           <b>${time}</b>
 
           <div style="font-size:13px;margin-top:6px">
             ${
               bookings.length
                 ? bookings.map(b => `
-  <div class="booking-row">
+                    <div class="booking-row">
+                      <span>👤 ${b.name}</span>
 
-    <span class="name">👤 ${b.name}</span>
-
-    ${b.user_id === currentUserId ? `
-      <button onclick="deleteRegistration('${b.id}')" title="מחק הרשמה">
-        🗑️
-      </button>
-    ` : ""}
-
-  </div>
-`).join("")
+                      ${b.user_id === currentUserId ? `
+                        <button onclick="event.stopPropagation(); deleteRegistration('${b.id}')">
+                          🗑️
+                        </button>
+                      ` : ""}
+                    </div>
+                  `).join("")
                 : "זמין"
             }
           </div>
+
         </div>
       `;
     });
@@ -224,6 +212,19 @@ function renderRegistrations(data) {
     html += `</div>`;
     container.innerHTML += html;
   }
+}
+
+// ================= TOGGLE =================
+function toggleSlot(date, time) {
+  const key = `${date}|${time}`;
+
+  if (selected.has(key)) {
+    selected.delete(key);
+  } else {
+    selected.add(key);
+  }
+
+  fetchRegistrations();
 }
 
 // ================= DELETE =================
@@ -262,7 +263,6 @@ async function submitForm() {
   const name = document.getElementById("name").value;
 
   const { data: { session } } = await client.auth.getSession();
-  if (!session) return;
 
   await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
@@ -273,11 +273,11 @@ async function submitForm() {
     },
     body: JSON.stringify({
       name,
-      slots: selected
+      slots: Array.from(selected)
     })
   });
 
-  selected = [];
+  selected.clear();
   fetchRegistrations();
 }
 
