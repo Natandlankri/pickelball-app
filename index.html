@@ -166,14 +166,14 @@ function renderRegistrations(data) {
     let d = new Date();
     d.setDate(d.getDate() + i);
     let date = d.toISOString().split("T")[0];
-
+    const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
     const holiday = holidaysMap[date];
 
     const card = document.createElement("div");
     card.className = "card";
 
     let html = `
-      <b>${date}</b>
+      <b>${hebrewDay} - ${date}</b>
       ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
       <br><br>
     `;
