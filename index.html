@@ -54,6 +54,17 @@ button {
   padding: 10px;
   margin-top: 6px;
   border-radius: 8px;
+  cursor: pointer;
+}
+
+.slot.selected {
+  background: #22c55e;
+}
+
+.slot.disabled {
+  background: #334155;
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 #userBox {
@@ -76,7 +87,6 @@ button {
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
-    <div id="errorBox" style="color:red;margin-top:8px;"></div>
   </div>
 
   <!-- APP -->
@@ -90,8 +100,6 @@ button {
 <div id="days"></div>
 
   </div>
-
-  <div id="userBox"></div>
 
 </div>
 
@@ -118,8 +126,8 @@ async function loadHolidays(year = 2026) {
   holidaysMap = {};
 
   data.items.forEach(item => {
-    if (item.date) {
-      const key = item.date.split("T")[0];
+    if (item.category === "holiday" && item.date) {
+      const key = item.date.substring(0, 10);
       if (!holidaysMap[key]) holidaysMap[key] = [];
       holidaysMap[key].push(item.title);
     }
@@ -148,7 +156,7 @@ async function fetchRegistrations() {
 async function deleteRegistration(id) {
   const { data: { session } } = await client.auth.getSession();
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
+  await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -158,9 +166,28 @@ async function deleteRegistration(id) {
     body: JSON.stringify({ id })
   });
 
-  if (!res.ok) return;
-
   fetchRegistrations();
+}
+
+// ================= SLOT LOGIC =================
+function toggleSlot(date, time, el) {
+  const index = selected.findIndex(
+    s => s.date === date && s.time === time
+  );
+
+  if (index > -1) {
+    selected.splice(index, 1);
+    el.classList.remove("selected");
+  } else {
+    selected.push({ date, time });
+    el.classList.add("selected");
+  }
+}
+
+function isSelected(date, time) {
+  return selected.some(
+    s => s.date === date && s.time === time
+  );
 }
 
 // ================= RENDER =================
@@ -180,8 +207,10 @@ function renderRegistrations(data) {
     let d = new Date();
     d.setDate(d.getDate() + i);
 
-    // ✅ Correct date handling
-    let date = d.toLocaleDateString("en-CA");
+    const date = new Date(
+      d.getTime() - d.getTimezoneOffset() * 60000
+    ).toISOString().split("T")[0];
+
     const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
     const holiday = holidaysMap[date];
 
@@ -200,11 +229,15 @@ function renderRegistrations(data) {
 
     times.forEach(time => {
       const bookings = (grouped[date] || []).filter(x => x.time === time);
+      const disabled = bookings.length > 0;
 
       html += `
-        <div class="slot">
+        <div class="slot ${isSelected(date, time) ? 'selected' : ''} ${disabled ? 'disabled' : ''}"
+             onclick="${disabled ? '' : `toggleSlot('${date}', '${time}', this)`}">
+          
           <b>${time}</b>
-          <div style="margin-top:6px;font-size:13px;opacity:0.9">
+
+          <div style="margin-top:6px;font-size:13px;">
             ${
               bookings.length
                 ? bookings.map(b => `
@@ -223,6 +256,7 @@ function renderRegistrations(data) {
                 : "זמין"
             }
           </div>
+
         </div>
       `;
     });
@@ -254,7 +288,11 @@ async function submitForm() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return alert("צריך להתחבר");
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+  if (selected.length === 0) {
+    return alert("בחר לפחות מועד אחד");
+  }
+
+  await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -266,8 +304,6 @@ async function submitForm() {
       slots: selected
     })
   });
-
-  if (!res.ok) return;
 
   selected = [];
   fetchRegistrations();
