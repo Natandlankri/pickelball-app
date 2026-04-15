@@ -106,15 +106,16 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    detectSessionInUrl: true, // ✅ FIXED
-  },
+    detectSessionInUrl: true
+  }
 });
 
 let selected = [];
 let holidaysMap = {};
+let lastLoginAttempt = 0;
 
 // =========================
-// 🇮🇱 HOLIDAYS (FIXED)
+// 🇮🇱 HOLIDAYS
 // =========================
 async function loadHolidays() {
   try {
@@ -129,7 +130,6 @@ async function loadHolidays() {
 
     data.items.forEach(item => {
       if (!item.date || !item.title) return;
-
       const date = new Date(item.date).toISOString().split("T")[0];
       map[date] = item.title;
     });
@@ -137,24 +137,19 @@ async function loadHolidays() {
     holidaysMap = map;
 
   } catch (err) {
-    console.error("Holiday error", err);
+    console.error(err);
   }
 }
 
 // =========================
-// INIT (🔥 FIXED MAGIC LINK)
+// INIT (magic link fix)
 // =========================
 window.addEventListener("load", async () => {
 
-  // 🔥 handle magic link (cross device fix)
   const { data } = await client.auth.getSession();
 
   if (window.location.hash.includes("access_token")) {
-    console.log("Magic link detected");
-
-    if (data.session) {
-      window.location.hash = ""; // clean URL
-    }
+    if (data.session) window.location.hash = "";
   }
 
   await loadHolidays();
@@ -184,19 +179,62 @@ function showApp() {
 }
 
 // =========================
-// LOGIN (IMPORTANT FIX)
+// LOGIN (FIXED)
 // =========================
 async function login() {
-  const email = document.getElementById("email").value;
+  const emailInput = document.getElementById("email");
+  const btn = document.querySelector(".login");
 
-  await client.auth.signInWithOtp({
-    email,
-    options: {
-      emailRedirectTo: window.location.origin // ✅ FIXED
+  const email = emailInput.value.trim().toLowerCase();
+
+  if (!email) return alert("נא להזין אימייל");
+
+  const now = Date.now();
+  if (now - lastLoginAttempt < 60000) {
+    return alert("חכה דקה לפני שליחה נוספת 🙏");
+  }
+
+  lastLoginAttempt = now;
+
+  try {
+    btn.disabled = true;
+    btn.innerText = "שולח...";
+
+    const { error } = await client.auth.signInWithOtp({
+      email,
+      options: {
+        emailRedirectTo: window.location.origin
+      }
+    });
+
+    if (error) {
+      if (error.message?.includes("rate") || error.status === 429) {
+        return alert("שלחת יותר מדי בקשות 😅");
+      }
+      return alert(error.message);
     }
-  });
 
-  alert("נשלח מייל 📧");
+    showCheckEmailState(email);
+
+  } catch (err) {
+    alert("שגיאה כללית");
+  } finally {
+    btn.disabled = false;
+    btn.innerText = "🔐 התחבר";
+  }
+}
+
+// =========================
+// EMAIL SENT UI
+// =========================
+function showCheckEmailState(email) {
+  document.getElementById("authBox").innerHTML = `
+    <div style="text-align:center;">
+      <h3>📧 נשלח קישור</h3>
+      <p>בדוק את המייל:</p>
+      <b>${email}</b>
+    </div>
+  `;
 }
 
 // =========================
@@ -204,7 +242,6 @@ async function login() {
 // =========================
 function toggleSlot(date, time, el) {
   const key = `${date}|${time}`;
-
   const i = selected.indexOf(key);
 
   if (i > -1) {
@@ -217,7 +254,7 @@ function toggleSlot(date, time, el) {
 }
 
 // =========================
-// FETCH REGISTRATIONS
+// FETCH
 // =========================
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
@@ -250,8 +287,7 @@ async function deleteRegistration(id) {
     body: JSON.stringify({ id })
   });
 
-  alert("נמחק בהצלחה ❌");
-
+  alert("נמחק ❌");
   fetchRegistrations();
 }
 
@@ -278,12 +314,9 @@ async function submitForm() {
 
   const data = await res.json();
 
-  if (!res.ok) {
-    return alert(data.error);
-  }
+  if (!res.ok) return alert(data.error);
 
-  alert("נרשמת בהצלחה 🎾");
-
+  alert("נרשמת 🎾");
   selected = [];
   fetchRegistrations();
 }
