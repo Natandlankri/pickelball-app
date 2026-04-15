@@ -26,13 +26,15 @@ body {
   margin-bottom: 15px;
 }
 
+/* FIXED INPUT WIDTH */
+/* FIXED INPUT WIDTH (unchanged) */
 input {
   width: 100%;
+  box-sizing: border-box;
   padding: 12px;
   margin: 8px 0;
   border-radius: 10px;
   border: none;
-  box-sizing: border-box;
 }
 
 button {
@@ -54,27 +56,12 @@ button {
   margin-top: 6px;
   border-radius: 8px;
   cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
 .slot.selected {
   background: #22c55e;
-#loader {
-  display: none;
-  font-size: 12px;
-  opacity: 0.7;
-  margin-top: 5px;
 }
 
-.delete-btn {
-  background: #ef4444;
-  border: none;
-  color: white;
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
 #userBox {
   margin-top: 10px;
   font-size: 14px;
@@ -93,8 +80,7 @@ button {
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
-    <div id="loader">בודק הרשאה...</div>
-    <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
+    <div id="errorBox" style="color:red;margin-top:8px;"></div>
   </div>
 
   <!-- APP -->
@@ -117,48 +103,17 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-});
 const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selected = [];
+let currentUserId = null;
 let holidaysMap = {};
-let lastLoginAttempt = 0;
 
-// =========================
-// 🇮🇱 HOLIDAYS
-// =========================
-async function loadHolidays() {
-  try {
-    const year = new Date().getFullYear();
-
-    const res = await fetch(
-      `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on&mod=on&nx=on`
-    );
-
-    const data = await res.json();
-    const map = {};
-
-    data.items.forEach(item => {
-      if (!item.date || !item.title) return;
-      const date = new Date(item.date).toISOString().split("T")[0];
-      map[date] = item.title;
-    });
-
-    holidaysMap = map;
-// ---------------- HOLIDAYS ----------------
+// ================= HOLIDAYS =================
 async function loadHolidays(year = 2026) {
   const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he`);
   const data = await res.json();
 
-  } catch (err) {
-    console.error(err);
-  }
   data.items.forEach(item => {
     if (item.date) {
       holidaysMap[item.date.split("T")[0]] = item.title;
@@ -166,38 +121,13 @@ async function loadHolidays(year = 2026) {
   });
 }
 
-// =========================
-// INIT (magic link fix)
-// =========================
-window.addEventListener("load", async () => {
-
-  const { data } = await client.auth.getSession();
-
-  if (window.location.hash.includes("access_token")) {
-    if (data.session) window.location.hash = "";
-  }
-
-  await loadHolidays();
-
-  if (data.session) {
-    showApp();
-    fetchRegistrations();
-  }
-});
-// ---------------- FETCH ----------------
+// ================= FETCH =================
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return;
 
-// =========================
-// AUTH LISTENER
-// =========================
-client.auth.onAuthStateChange((_event, session) => {
-  if (session) {
-    showApp();
-    fetchRegistrations();
-  }
-});
+  currentUserId = session.user.id;
+
   const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -205,165 +135,158 @@ client.auth.onAuthStateChange((_event, session) => {
     }
   });
 
-// =========================
-// SHOW APP
-// =========================
-function showApp() {
-  document.getElementById("authBox").style.display = "none";
-  document.getElementById("appBox").style.display = "block";
   const data = await res.json();
   renderRegistrations(data);
 }
 
-// =========================
-// LOGIN (FIXED + CHECK USER)
-// =========================
-async function login() {
-  const emailInput = document.getElementById("email");
-  const btn = document.querySelector(".login");
-// ---------------- FIXED RENDER ----------------
+// ================= DELETE =================
+// ================= DELETE (WITH TOAST) =================
+async function deleteRegistration(id) {
+  const { data: { session } } = await client.auth.getSession();
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ id })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) {
+    alert(data.error);
+    return;
+  }
+
+  // ✅ toast message
+  const toast = document.createElement("div");
+  toast.innerText = "✔ הוסר בהצלחה";
+  toast.style.cssText = `
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #22c55e;
+    color: white;
+    padding: 10px 14px;
+    border-radius: 10px;
+    font-size: 14px;
+    z-index: 9999;
+  `;
+
+  document.body.appendChild(toast);
+
+  setTimeout(() => toast.remove(), 2000);
+
+  fetchRegistrations();
+}
+
+// ================= FETCH =================
+async function fetchRegistrations() {
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return;
+
+  currentUserId = session.user.id;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    }
+  });
+
+  const data = await res.json();
+  renderRegistrations(data);
+}
+
+// ================= RENDER =================
 function renderRegistrations(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
 
-  const email = emailInput.value.trim().toLowerCase();
   const times = ["07:30", "17:00"];
 
-  if (!email) return alert("נא להזין אימייל");
   const grouped = {};
   data.forEach(r => {
     if (!grouped[r.date]) grouped[r.date] = [];
     grouped[r.date].push(r);
   });
 
-  const now = Date.now();
-  if (now - lastLoginAttempt < 60000) {
-    return alert("חכה דקה לפני שליחה נוספת 🙏");
-  }
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
     let date = d.toISOString().split("T")[0];
 
-  lastLoginAttempt = now;
-
-  try {
-    btn.disabled = true;
-    btn.innerText = "בודק הרשאה...";
-
-    // ✅ CHECK USER
-    const checkRes = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ email }),
-    });
     const holiday = holidaysMap[date];
 
-    const checkData = await checkRes.json();
     const card = document.createElement("div");
     card.className = "card";
 
-    if (!checkRes.ok || !checkData.allowed) {
-      return alert("האימייל לא מורשה ❌");
-    }
     let html = `
       <b>${date}</b>
       ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
       <br><br>
     `;
 
-    // ✅ SEND OTP
-    btn.innerText = "שולח מייל...";
     times.forEach(time => {
 
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
-      }
-      // ✅ FIX: allow multiple users per slot
       const bookings = (grouped[date] || []).filter(x => x.time === time);
 
       html += `
         <div class="slot">
+
           <b>${time}</b>
-          <div style="font-size:13px;opacity:0.9;margin-top:5px">
+
+          <div style="margin-top:6px;font-size:13px;opacity:0.9">
+
             ${
               bookings.length
-                ? bookings.map(b => "👤 " + b.name).join("<br>")
+                ? bookings.map(b => `
+                    <div style="display:flex;justify-content:space-between;align-items:center">
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <span>👤 ${b.name}</span>
+
+                      ${b.user_id === currentUserId ? `
+                        <button onclick="deleteRegistration('${b.id}')"
+                          style="background:red;color:white;border:none;
+                                 border-radius:6px;padding:2px 6px;
+                                 cursor:pointer;font-size:12px">
+                          style="
+                            background:#ef4444;
+                            color:white;
+                            border:none;
+                            border-radius:6px;
+                            padding:1px 6px;
+                            font-size:10px;
+                            cursor:pointer;
+                            line-height:1;
+                          ">
+                          ❌
+                        </button>
+                      ` : ""}
+                    </div>
+                  `).join("")
                 : "זמין"
             }
+
           </div>
+
         </div>
       `;
     });
 
-    if (error) {
-      if (error.message?.includes("rate") || error.status === 429) {
-        return alert("שלחת יותר מדי בקשות 😅");
-      }
-      return alert(error.message);
-    }
-
-    showCheckEmailState(email);
-
-  } catch (err) {
-    alert("שגיאה כללית");
-  } finally {
-    btn.disabled = false;
-    btn.innerText = "🔐 התחבר";
-  }
-}
-
-// =========================
-// EMAIL SENT UI
-// =========================
-function showCheckEmailState(email) {
-  document.getElementById("authBox").innerHTML = `
-    <div style="text-align:center;">
-      <h3>📧 נשלח קישור</h3>
-      <p>בדוק את המייל:</p>
-      <b>${email}</b>
-    </div>
-  `;
-}
-
-// =========================
-// TOGGLE SLOT
-// =========================
-function toggleSlot(date, time, el) {
-  const key = `${date}|${time}`;
-  const i = selected.indexOf(key);
-
-  if (i > -1) {
-    selected.splice(i, 1);
-    el.classList.remove("selected");
-  } else {
-    selected.push(key);
-    el.classList.add("selected");
     card.innerHTML = html;
     container.appendChild(card);
   }
 }
 
-// =========================
-// FETCH
-// =========================
-async function fetchRegistrations() {
-  const { data: { session } } = await client.auth.getSession();
-  if (!session) return;
-// ---------------- LOGIN ----------------
+// ================= LOGIN =================
 async function login() {
   const email = document.getElementById("email").value;
 
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
-    headers: {
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
   const { error } = await client.auth.signInWithOtp({
     email,
     options: {
@@ -371,43 +294,15 @@ async function login() {
     }
   });
 
-  const data = await res.json();
-  render(data);
   if (error) alert(error.message);
   else alert("נשלח מייל 📧");
 }
 
-// =========================
-// DELETE
-// =========================
-async function deleteRegistration(id) {
-  const { data: { session } } = await client.auth.getSession();
-
-  await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ id })
-  });
-
-  alert("נמחק ❌");
-  fetchRegistrations();
-}
-
-// =========================
-// SUBMIT
-// =========================
-// ---------------- SUBMIT ----------------
+// ================= SUBMIT =================
 async function submitForm() {
   const name = document.getElementById("name").value;
-  const { data: { session } } = await client.auth.getSession();
 
-  if (!name || selected.length === 0) {
-    return alert("בחר שם ושעות");
-  }
+  const { data: { session } } = await client.auth.getSession();
   if (!session) return alert("צריך להתחבר");
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
@@ -415,10 +310,8 @@ async function submitForm() {
     headers: {
       "Content-Type": "application/json",
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({ name, slots: selected })
     body: JSON.stringify({
       name,
       slots: selected
@@ -429,72 +322,14 @@ async function submitForm() {
 
   if (!res.ok) return alert(data.error);
 
-  alert("נרשמת 🎾");
   selected = [];
   fetchRegistrations();
 }
 
-// =========================
-// RENDER
-// =========================
-function render(data) {
-  const container = document.getElementById("days");
-  container.innerHTML = "";
-
-  const times = ["07:30", "17:00"];
-
-  const grouped = {};
-  data.forEach(r => {
-    if (!grouped[r.date]) grouped[r.date] = [];
-    grouped[r.date].push(r);
-  });
-
-  for (let i = 1; i <= 7; i++) {
-    let d = new Date();
-    d.setDate(d.getDate() + i);
-
-const date = d.toISOString().split("T")[0];
-const holiday = holidaysMap[date];
-
-const dObj = new Date(date);
-const dayName = dObj.toLocaleDateString("he-IL", { weekday: "long" });
-const shortDate = dObj.toLocaleDateString("he-IL");
-
-const card = document.createElement("div");
-card.className = "card";
-
-let html = `<b>${dayName} - ${shortDate}</b>`;
-
-    if (holiday) {
-      html += `<div style="color:#fbbf24;">📅 ${holiday}</div>`;
-    }
-
-    html += `<br><br>`;
-
-    times.forEach(time => {
-      const booked = (grouped[date] || []).find(x => x.time === time);
-
-      if (booked) {
-        html += `
-          <div class="slot">
-            <span>${time} - ${booked.name}</span>
-            <button class="delete-btn" onclick="deleteRegistration('${booked.id}')">🗑️</button>
-          </div>
-        `;
-      } else {
-        html += `
-          <div class="slot" onclick="toggleSlot('${date}','${time}',this)">
-            ${time}
-          </div>
-        `;
-      }
-    });
-// ---------------- SESSION ----------------
+// ================= SESSION =================
 async function checkSession() {
   const { data: { session } } = await client.auth.getSession();
 
-    card.innerHTML = html;
-    container.appendChild(card);
   if (session) {
     document.getElementById("authBox").style.display = "none";
     document.getElementById("appBox").style.display = "block";
