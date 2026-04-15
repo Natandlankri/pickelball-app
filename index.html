@@ -76,14 +76,10 @@ button {
 
   <h1>🎾 פיקלבול בת חפר</h1>
 
-  <!-- AUTH -->
-
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
   </div>
-
-  <!-- APP -->
 
   <div id="appBox" style="display:none;">
     <div class="card">
@@ -93,6 +89,7 @@ button {
 
 
 <div id="days"></div>
+
 
   </div>
 
@@ -110,6 +107,13 @@ let selected = [];
 let currentUserId = null;
 let holidaysMap = {};
 
+// ================= SAFE HELPERS =================
+function safeDate(value) {
+  if (!value) return null;
+  if (typeof value !== "string") return null;
+  return value;
+}
+
 // ================= HOLIDAYS =================
 async function loadHolidays(year = 2026) {
   const res = await fetch(
@@ -117,12 +121,11 @@ async function loadHolidays(year = 2026) {
   );
 
   const data = await res.json();
-
   holidaysMap = {};
 
-  data.items.forEach(item => {
-    if (item.category === "holiday" && item.date) {
-      const key = item.date.trim().substring(0, 10);
+  (data.items || []).forEach(item => {
+    if (item?.category === "holiday" && typeof item.date === "string") {
+      const key = item.date.slice(0, 10);
       if (!holidaysMap[key]) holidaysMap[key] = [];
       holidaysMap[key].push(item.title);
     }
@@ -146,7 +149,8 @@ async function fetchRegistrations() {
   });
 
   const data = await res.json();
-  renderRegistrations(data);
+
+  renderRegistrations(Array.isArray(data) ? data : []);
 }
 
 // ================= DELETE =================
@@ -182,9 +186,7 @@ function toggleSlot(date, time, el) {
 }
 
 function isSelected(date, time) {
-  return selected.some(
-    s => s.date === date && s.time === time
-  );
+  return selected.some(s => s.date === date && s.time === time);
 }
 
 // ================= RENDER =================
@@ -195,23 +197,25 @@ function renderRegistrations(data) {
   const times = ["07:30", "17:00"];
 
   const grouped = {};
-  data.forEach(r => {
-    if (!grouped[r.date]) grouped[r.date] = [];
-    grouped[r.date].push(r);
+
+  (data || []).forEach(r => {
+    const safe = safeDate(r?.date);
+    if (!safe) return;
+
+    if (!grouped[safe]) grouped[safe] = [];
+    grouped[safe].push(r);
   });
 
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
 
-    // ✅ stable ISO date (NO timezone bugs)
     const date = d.toLocaleDateString("en-CA");
-
     const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
 
     const holiday = holidaysMap[date];
 
-    const card = document.createElement("div");
+    let card = document.createElement("div");
     card.className = "card";
 
     let html = `
@@ -225,10 +229,10 @@ function renderRegistrations(data) {
     `;
 
     times.forEach(time => {
-      const bookings = (grouped[date] || []).filter(x => x.time === time);
+      const bookings = grouped[date] || [];
 
       html += `
-        <div class="slot ${isSelected(date, time) ? 'selected' : ''}"
+        <div class="slot ${isSelected(date, time) ? "selected" : ""}"
              onclick="toggleSlot('${date}', '${time}', this)">
           
           <b>${time} (${bookings.length})</b>
@@ -238,9 +242,9 @@ function renderRegistrations(data) {
               bookings.length
                 ? bookings.map(b => `
                     <div style="display:flex;justify-content:space-between">
-                      <span>👤 ${b.name}</span>
+                      <span>👤 ${b?.name || "Unknown"}</span>
                       ${
-                        b.user_id === currentUserId
+                        b?.user_id === currentUserId
                           ? `<button onclick="deleteRegistration('${b.id}')"
                               style="background:red;color:white;border:none;border-radius:6px;padding:2px 6px;font-size:12px">
                               ❌
@@ -284,7 +288,7 @@ async function submitForm() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return alert("צריך להתחבר");
 
-  if (selected.length === 0) return alert("בחר לפחות מועד אחד");
+  if (!selected.length) return alert("בחר לפחות מועד אחד");
 
   await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
