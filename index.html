@@ -73,6 +73,11 @@ button {
   font-size: 14px;
   opacity: 0.9;
 }
+
+  button:hover {
+  opacity: 0.7;
+  transform: scale(1.1);
+}
 </style>
 </head>
 
@@ -192,7 +197,28 @@ function renderRegistrations(data) {
           <div style="font-size:13px;opacity:0.9;margin-top:5px">
             ${
               bookings.length
-                ? bookings.map(b => "👤 " + b.name).join("<br>")
+                ? bookings.map(b => `
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+
+    <span>👤 ${b.name}</span>
+
+    ${b.user_id === currentUserId ? `
+      <button onclick="deleteRegistration('${b.id}')"
+        style="
+          background:transparent;
+          border:none;
+          color:#ef4444;
+          cursor:pointer;
+          font-size:16px;
+          line-height:1;
+        "
+        title="מחק הרשמה">
+        🗑️
+      </button>
+    ` : ""}
+
+  </div>
+`).join("")
                 : "זמין"
             }
           </div>
