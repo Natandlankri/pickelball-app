@@ -26,7 +26,6 @@ body {
   margin-bottom: 15px;
 }
 
-/* ✅ FIXED INPUT WIDTH */
 input {
   width: 100%;
   box-sizing: border-box;
@@ -54,24 +53,6 @@ button {
   padding: 10px;
   margin-top: 6px;
   border-radius: 8px;
-  cursor: pointer;
-}
-
-.slot.selected {
-  background: #22c55e;
-}
-
-#loader {
-  display: none;
-  font-size: 12px;
-  opacity: 0.7;
-  margin-top: 5px;
-}
-
-#userBox {
-  margin-top: 10px;
-  font-size: 14px;
-  opacity: 0.9;
 }
 </style>
 </head>
@@ -86,8 +67,6 @@ button {
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
-    <div id="loader">בודק הרשאה...</div>
-    <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
   </div>
 
   <!-- APP -->
@@ -99,8 +78,6 @@ button {
 
     <div id="days"></div>
   </div>
-
-  <div id="userBox"></div>
 
 </div>
 
@@ -114,13 +91,11 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selected = [];
 let holidaysMap = {};
+let currentUserId = null;
 
 // ================= HOLIDAYS =================
 async function loadHolidays(year = 2026) {
-  const res = await fetch(
-    `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=off&mod=off&nx=off`
-  );
-
+  const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=off`);
   const data = await res.json();
 
   holidaysMap = {};
@@ -138,6 +113,8 @@ async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return;
 
+  currentUserId = session.user.id;
+
   const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
@@ -149,7 +126,7 @@ async function fetchRegistrations() {
   renderRegistrations(data);
 }
 
-// ================= RENDER (FIXED) =================
+// ================= RENDER =================
 function renderRegistrations(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
@@ -165,34 +142,48 @@ function renderRegistrations(data) {
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
-    let date = d.toLocaleDateString("en-CA");
+
+    let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+      .toISOString()
+      .split("T")[0];
+
     const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
     const holiday = holidaysMap[date];
 
-    const card = document.createElement("div");
-    card.className = "card";
-
     let html = `
-      <b>${hebrewDay} - ${date}</b>
-      ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
-      <br><br>
+      <div class="card">
+        <b>${hebrewDay} - ${date}</b>
+        ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
+        <br><br>
     `;
 
     times.forEach(time => {
-
       const bookings = (grouped[date] || []).filter(x => x.time === time);
 
-      const key = `${date}|${time}`;
-      const isSelected = selected.includes(key);
-
       html += `
-        <div class="slot ${isSelected ? "selected" : ""}"
-             onclick="toggleSlot('${date}','${time}', this)">
+        <div class="slot">
           <b>${time}</b>
-          <div style="font-size:13px;opacity:0.9;margin-top:5px">
+
+          <div style="font-size:13px;margin-top:6px">
             ${
               bookings.length
-                ? bookings.map(b => "👤 " + b.name).join("<br>")
+                ? bookings.map(b => `
+                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+                      <span>👤 ${b.name}</span>
+
+                      ${b.user_id === currentUserId ? `
+                        <button onclick="deleteRegistration('${b.id}')"
+                          style="
+                            background:transparent;
+                            border:none;
+                            color:#ef4444;
+                            cursor:pointer;
+                            font-size:16px;">
+                          🗑️
+                        </button>
+                      ` : ""}
+                    </div>
+                  `).join("")
                 : "זמין"
             }
           </div>
@@ -200,39 +191,40 @@ function renderRegistrations(data) {
       `;
     });
 
-    card.innerHTML = html;
-    container.appendChild(card);
+    html += `</div>`;
+    container.innerHTML += html;
   }
 }
 
-// ================= SLOT TOGGLE (FIXED) =================
-function toggleSlot(date, time, el) {
-  const key = `${date}|${time}`;
+// ================= DELETE =================
+async function deleteRegistration(id) {
+  const { data: { session } } = await client.auth.getSession();
 
-  const index = selected.indexOf(key);
+  await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ id })
+  });
 
-  if (index > -1) {
-    selected.splice(index, 1);
-    el.classList.remove("selected");
-  } else {
-    selected.push(key);
-    el.classList.add("selected");
-  }
+  fetchRegistrations();
 }
 
 // ================= LOGIN =================
 async function login() {
   const email = document.getElementById("email").value;
 
-  const { error } = await client.auth.signInWithOtp({
+  await client.auth.signInWithOtp({
     email,
     options: {
-      emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
+      emailRedirectTo: window.location.href
     }
   });
 
-  if (error) alert(error.message);
-  else alert("נשלח מייל 📧");
+  alert("נשלח מייל 📧");
 }
 
 // ================= SUBMIT =================
@@ -240,10 +232,9 @@ async function submitForm() {
   const name = document.getElementById("name").value;
 
   const { data: { session } } = await client.auth.getSession();
+  if (!session) return;
 
-  if (!session) return alert("צריך להתחבר");
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+  await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -255,10 +246,6 @@ async function submitForm() {
       slots: selected
     })
   });
-
-  const data = await res.json();
-
-  if (!res.ok) return alert(data.error);
 
   selected = [];
   fetchRegistrations();
