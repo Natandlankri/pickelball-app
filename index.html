@@ -117,12 +117,18 @@ let holidaysMap = {};
 
 // ================= HOLIDAYS =================
 async function loadHolidays(year = 2026) {
-  const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he`);
+  const res = await fetch(
+    `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=off&mod=off&nx=off`
+  );
+
   const data = await res.json();
 
-  data.items.forEach(item => {
-    if (item.date) {
-      holidaysMap[item.date.split("T")[0]] = item.title;
+  holidaysMap = {};
+
+  (data.items || []).forEach(item => {
+    if (item?.date && item?.category === "holiday") {
+      const key = item.date.substring(0, 10);
+      holidaysMap[key] = item.title;
     }
   });
 }
