@@ -32,10 +32,10 @@ input {
   margin: 8px 0;
   border-radius: 10px;
   border: none;
-  box-sizing: border-box;
 }
 
 button {
+  width: 100%;
   margin-top: 10px;
   padding: 12px;
   border: none;
@@ -52,23 +52,19 @@ button {
   padding: 10px;
   margin-top: 6px;
   border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
 }
 
-.slot.selected {
-  background: #22c55e;
+#loader {
+  display: none;
+  font-size: 12px;
+  opacity: 0.7;
+  margin-top: 5px;
 }
 
-.delete-btn {
-  background: #ef4444;
-  border: none;
-  color: white;
-  border-radius: 6px;
-  padding: 4px 8px;
-  cursor: pointer;
+#userBox {
+  margin-top: 10px;
+  font-size: 14px;
+  opacity: 0.9;
 }
 </style>
 </head>
@@ -79,13 +75,13 @@ button {
 
   <h1>🎾 פיקלבול בת חפר</h1>
 
-  <!-- AUTH -->
   <div class="card" id="authBox">
     <input id="email" placeholder="אימייל להתחברות">
     <button class="login" onclick="login()">🔐 התחבר</button>
+    <div id="loader">בודק הרשאה...</div>
+    <div id="errorBox" style="color:#ef4444;margin-top:8px;"></div>
   </div>
 
-  <!-- APP -->
   <div id="appBox" style="display:none;">
     <div class="card">
       <input id="name" placeholder="שם מלא">
@@ -95,6 +91,8 @@ button {
     <div id="days"></div>
   </div>
 
+  <div id="userBox"></div>
+
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -103,180 +101,24 @@ button {
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
 const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
 
-const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-    detectSessionInUrl: true
-  }
-});
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selected = [];
 let holidaysMap = {};
-let lastLoginAttempt = 0;
 
-// =========================
-// 🇮🇱 HOLIDAYS
-// =========================
-async function loadHolidays() {
-  try {
-    const year = new Date().getFullYear();
+// ---------------- HOLIDAYS ----------------
+async function loadHolidays(year = 2026) {
+  const res = await fetch(`https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he`);
+  const data = await res.json();
 
-    const res = await fetch(
-      `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=on&mod=on&nx=on`
-    );
-
-    const data = await res.json();
-    const map = {};
-
-    data.items.forEach(item => {
-      if (!item.date || !item.title) return;
-      const date = new Date(item.date).toISOString().split("T")[0];
-      map[date] = item.title;
-    });
-
-    holidaysMap = map;
-
-  } catch (err) {
-    console.error(err);
-  }
-}
-
-// =========================
-// INIT (magic link fix)
-// =========================
-window.addEventListener("load", async () => {
-
-  const { data } = await client.auth.getSession();
-
-  if (window.location.hash.includes("access_token")) {
-    if (data.session) window.location.hash = "";
-  }
-
-  await loadHolidays();
-
-  if (data.session) {
-    showApp();
-    fetchRegistrations();
-  }
-});
-
-// =========================
-// AUTH LISTENER
-// =========================
-client.auth.onAuthStateChange((_event, session) => {
-  if (session) {
-    showApp();
-    fetchRegistrations();
-  }
-});
-
-// =========================
-// SHOW APP
-// =========================
-function showApp() {
-  document.getElementById("authBox").style.display = "none";
-  document.getElementById("appBox").style.display = "block";
-}
-
-// =========================
-// LOGIN (FIXED + CHECK USER)
-// =========================
-async function login() {
-  const emailInput = document.getElementById("email");
-  const btn = document.querySelector(".login");
-
-  const email = emailInput.value.trim().toLowerCase();
-
-  if (!email) return alert("נא להזין אימייל");
-
-  const now = Date.now();
-  if (now - lastLoginAttempt < 60000) {
-    return alert("חכה דקה לפני שליחה נוספת 🙏");
-  }
-
-  lastLoginAttempt = now;
-
-  try {
-    btn.disabled = true;
-    btn.innerText = "בודק הרשאה...";
-
-    // ✅ CHECK USER
-    const checkRes = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        apikey: SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
-      },
-      body: JSON.stringify({ email }),
-    });
-
-    const checkData = await checkRes.json();
-
-    if (!checkRes.ok || !checkData.allowed) {
-      return alert("האימייל לא מורשה ❌");
+  data.items.forEach(item => {
+    if (item.date) {
+      holidaysMap[item.date.split("T")[0]] = item.title;
     }
-
-    // ✅ SEND OTP
-    btn.innerText = "שולח מייל...";
-
-    const { error } = await client.auth.signInWithOtp({
-      email,
-      options: {
-        emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
-      }
-    });
-
-    if (error) {
-      if (error.message?.includes("rate") || error.status === 429) {
-        return alert("שלחת יותר מדי בקשות 😅");
-      }
-      return alert(error.message);
-    }
-
-    showCheckEmailState(email);
-
-  } catch (err) {
-    alert("שגיאה כללית");
-  } finally {
-    btn.disabled = false;
-    btn.innerText = "🔐 התחבר";
-  }
+  });
 }
 
-// =========================
-// EMAIL SENT UI
-// =========================
-function showCheckEmailState(email) {
-  document.getElementById("authBox").innerHTML = `
-    <div style="text-align:center;">
-      <h3>📧 נשלח קישור</h3>
-      <p>בדוק את המייל:</p>
-      <b>${email}</b>
-    </div>
-  `;
-}
-
-// =========================
-// TOGGLE SLOT
-// =========================
-function toggleSlot(date, time, el) {
-  const key = `${date}|${time}`;
-  const i = selected.indexOf(key);
-
-  if (i > -1) {
-    selected.splice(i, 1);
-    el.classList.remove("selected");
-  } else {
-    selected.push(key);
-    el.classList.add("selected");
-  }
-}
-
-// =========================
-// FETCH
-// =========================
+// ---------------- FETCH ----------------
 async function fetchRegistrations() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return;
@@ -284,68 +126,16 @@ async function fetchRegistrations() {
   const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
     headers: {
       apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
+      Authorization: `Bearer ${session.access_token}`,
     }
   });
 
   const data = await res.json();
-  render(data);
+  renderRegistrations(data);
 }
 
-// =========================
-// DELETE
-// =========================
-async function deleteRegistration(id) {
-  const { data: { session } } = await client.auth.getSession();
-
-  await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ id })
-  });
-
-  alert("נמחק ❌");
-  fetchRegistrations();
-}
-
-// =========================
-// SUBMIT
-// =========================
-async function submitForm() {
-  const name = document.getElementById("name").value;
-  const { data: { session } } = await client.auth.getSession();
-
-  if (!name || selected.length === 0) {
-    return alert("בחר שם ושעות");
-  }
-
-  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      apikey: SUPABASE_ANON_KEY,
-      Authorization: `Bearer ${session.access_token}`
-    },
-    body: JSON.stringify({ name, slots: selected })
-  });
-
-  const data = await res.json();
-
-  if (!res.ok) return alert(data.error);
-
-  alert("נרשמת 🎾");
-  selected = [];
-  fetchRegistrations();
-}
-
-// =========================
-// RENDER
-// =========================
-function render(data) {
+// ---------------- FIXED RENDER ----------------
+function renderRegistrations(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
 
@@ -360,48 +150,105 @@ function render(data) {
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
+    let date = d.toISOString().split("T")[0];
 
-const date = d.toISOString().split("T")[0];
-const holiday = holidaysMap[date];
+    const holiday = holidaysMap[date];
 
-const dObj = new Date(date);
-const dayName = dObj.toLocaleDateString("he-IL", { weekday: "long" });
-const shortDate = dObj.toLocaleDateString("he-IL");
+    const card = document.createElement("div");
+    card.className = "card";
 
-const card = document.createElement("div");
-card.className = "card";
-
-let html = `<b>${dayName} - ${shortDate}</b>`;
-
-    if (holiday) {
-      html += `<div style="color:#fbbf24;">📅 ${holiday}</div>`;
-    }
-
-    html += `<br><br>`;
+    let html = `
+      <b>${date}</b>
+      ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
+      <br><br>
+    `;
 
     times.forEach(time => {
-      const booked = (grouped[date] || []).find(x => x.time === time);
 
-      if (booked) {
-        html += `
-          <div class="slot">
-            <span>${time} - ${booked.name}</span>
-            <button class="delete-btn" onclick="deleteRegistration('${booked.id}')">🗑️</button>
+      // ✅ FIX: allow multiple users per slot
+      const bookings = (grouped[date] || []).filter(x => x.time === time);
+
+      html += `
+        <div class="slot">
+          <b>${time}</b>
+          <div style="font-size:13px;opacity:0.9;margin-top:5px">
+            ${
+              bookings.length
+                ? bookings.map(b => "👤 " + b.name).join("<br>")
+                : "זמין"
+            }
           </div>
-        `;
-      } else {
-        html += `
-          <div class="slot" onclick="toggleSlot('${date}','${time}',this)">
-            ${time}
-          </div>
-        `;
-      }
+        </div>
+      `;
     });
 
     card.innerHTML = html;
     container.appendChild(card);
   }
 }
+
+// ---------------- LOGIN ----------------
+async function login() {
+  const email = document.getElementById("email").value;
+
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: "https://natandlankri.github.io/pickelball-app/"
+    }
+  });
+
+  if (error) alert(error.message);
+  else alert("נשלח מייל 📧");
+}
+
+// ---------------- SUBMIT ----------------
+async function submitForm() {
+  const name = document.getElementById("name").value;
+  const { data: { session } } = await client.auth.getSession();
+
+  if (!session) return alert("צריך להתחבר");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      name,
+      slots: selected
+    })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) return alert(data.error);
+
+  selected = [];
+  fetchRegistrations();
+}
+
+// ---------------- SESSION ----------------
+async function checkSession() {
+  const { data: { session } } = await client.auth.getSession();
+
+  if (session) {
+    document.getElementById("authBox").style.display = "none";
+    document.getElementById("appBox").style.display = "block";
+    fetchRegistrations();
+  }
+}
+
+window.addEventListener("load", async () => {
+  await loadHolidays(2026);
+  checkSession();
+});
+
+client.auth.onAuthStateChange(() => {
+  checkSession();
+});
 </script>
 
 </body>
