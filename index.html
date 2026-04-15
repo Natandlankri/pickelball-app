@@ -61,12 +61,6 @@ button {
   background: #22c55e;
 }
 
-.slot.disabled {
-  background: #334155;
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 #userBox {
   margin-top: 10px;
   font-size: 14px;
@@ -96,6 +90,7 @@ button {
       <input id="name" placeholder="שם מלא">
       <button class="primary" onclick="submitForm()">הרשמה</button>
     </div>
+
 
 <div id="days"></div>
 
@@ -229,13 +224,12 @@ function renderRegistrations(data) {
 
     times.forEach(time => {
       const bookings = (grouped[date] || []).filter(x => x.time === time);
-      const disabled = bookings.length > 0;
 
       html += `
-        <div class="slot ${isSelected(date, time) ? 'selected' : ''} ${disabled ? 'disabled' : ''}"
-             onclick="${disabled ? '' : `toggleSlot('${date}', '${time}', this)`}">
+        <div class="slot ${isSelected(date, time) ? 'selected' : ''}"
+             onclick="toggleSlot('${date}', '${time}', this)">
           
-          <b>${time}</b>
+          <b>${time} (${bookings.length})</b>
 
           <div style="margin-top:6px;font-size:13px;">
             ${
@@ -288,9 +282,7 @@ async function submitForm() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return alert("צריך להתחבר");
 
-  if (selected.length === 0) {
-    return alert("בחר לפחות מועד אחד");
-  }
+  if (selected.length === 0) return alert("בחר לפחות מועד אחד");
 
   await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
