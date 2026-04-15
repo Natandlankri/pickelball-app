@@ -54,6 +54,37 @@ button {
   margin-top: 6px;
   border-radius: 8px;
 }
+
+.booking-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  padding: 2px 0;
+}
+
+.booking-row .name {
+  flex: 1;
+}
+
+/* hidden by default */
+.booking-row button {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 16px;
+
+  opacity: 0;
+  transform: scale(0.9);
+  transition: 0.15s ease;
+}
+
+/* show on hover */
+.booking-row:hover button {
+  opacity: 1;
+  transform: scale(1);
+}
 </style>
 </head>
 
@@ -168,22 +199,20 @@ function renderRegistrations(data) {
             ${
               bookings.length
                 ? bookings.map(b => `
-                    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-                      <span>👤 ${b.name}</span>
+  <div class="booking-row">
 
-                      ${b.user_id === currentUserId ? `
-                        <button onclick="deleteRegistration('${b.id}')"
-                          style="
-                            background:transparent;
-                            border:none;
-                            color:#ef4444;
-                            cursor:pointer;
-                            font-size:16px;">
-                          🗑️
-                        </button>
-                      ` : ""}
-                    </div>
-                  `).join("")
+    <span class="name">
+      👤 ${b.name}
+    </span>
+
+    ${b.user_id === currentUserId ? `
+      <button onclick="deleteRegistration('${b.id}')" title="מחק הרשמה">
+        🗑️
+      </button>
+    ` : ""}
+
+  </div>
+`).join("")
                 : "זמין"
             }
           </div>
