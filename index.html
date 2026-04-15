@@ -179,7 +179,7 @@ function showApp() {
 }
 
 // =========================
-// LOGIN (FIXED)
+// LOGIN (FIXED + CHECK USER)
 // =========================
 async function login() {
   const emailInput = document.getElementById("email");
@@ -198,7 +198,27 @@ async function login() {
 
   try {
     btn.disabled = true;
-    btn.innerText = "שולח...";
+    btn.innerText = "בודק הרשאה...";
+
+    // ✅ CHECK USER
+    const checkRes = await fetch(`${SUPABASE_URL}/functions/v1/check-user`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+      },
+      body: JSON.stringify({ email }),
+    });
+
+    const checkData = await checkRes.json();
+
+    if (!checkRes.ok || !checkData.allowed) {
+      return alert("האימייל לא מורשה ❌");
+    }
+
+    // ✅ SEND OTP
+    btn.innerText = "שולח מייל...";
 
     const { error } = await client.auth.signInWithOtp({
       email,
