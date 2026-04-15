@@ -165,7 +165,9 @@ function renderRegistrations(data) {
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
-    let date = d.toISOString().split("T")[0];
+    let date = new Date(d.getTime() - d.getTimezoneOffset() * 60000)
+  .toISOString()
+  .split("T")[0];
     const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
     const holiday = holidaysMap[date];
 
