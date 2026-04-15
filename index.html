@@ -66,24 +66,27 @@ button {
 .booking-row .name {
   flex: 1;
 }
+.booking-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;          /* small spacing */
+  padding: 2px 0;
+}
 
-/* hidden by default */
+.booking-row .name {
+  display: inline-block;
+}
+
+/* trash icon stays right next to name */
 .booking-row button {
   background: transparent;
   border: none;
   color: #ef4444;
   cursor: pointer;
-  font-size: 16px;
-
-  opacity: 0;
-  transform: scale(0.9);
-  transition: 0.15s ease;
-}
-
-/* show on hover */
-.booking-row:hover button {
-  opacity: 1;
-  transform: scale(1);
+  font-size: 15px;
+  padding: 0;
+  margin: 0;
+  line-height: 1;
 }
 </style>
 </head>
@@ -201,9 +204,7 @@ function renderRegistrations(data) {
                 ? bookings.map(b => `
   <div class="booking-row">
 
-    <span class="name">
-      👤 ${b.name}
-    </span>
+    <span class="name">👤 ${b.name}</span>
 
     ${b.user_id === currentUserId ? `
       <button onclick="deleteRegistration('${b.id}')" title="מחק הרשמה">
