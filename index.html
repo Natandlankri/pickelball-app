@@ -11,6 +11,7 @@ body {
   background: #0f172a;
   color: white;
   margin: 0;
+  padding-bottom: 90px;
 }
 
 .container {
@@ -46,7 +47,6 @@ button {
 }
 
 .login { background: #6366f1; color: white; }
-.primary { background: #38bdf8; }
 
 .slot {
   background: #475569;
@@ -54,6 +54,7 @@ button {
   margin-top: 6px;
   border-radius: 8px;
   cursor: pointer;
+  transition: background 0.15s;
 }
 
 .slot.selected {
@@ -74,6 +75,40 @@ button {
   cursor: pointer;
   font-size: 16px;
 }
+
+/* Sticky bottom button */
+.sticky-footer {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 16px 20px;
+  background: #0f172a;
+  border-top: 1px solid #1e293b;
+  display: flex;
+  justify-content: center;
+  z-index: 100;
+}
+
+.register-btn {
+  max-width: 500px;
+  width: 100%;
+  padding: 14px;
+  border: none;
+  border-radius: 14px;
+  font-size: 16px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s, opacity 0.2s;
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+.register-btn:disabled {
+  background: #334155;
+  color: #64748b;
+  cursor: not-allowed;
+}
 </style>
 </head>
 
@@ -91,13 +126,16 @@ button {
 
   <!-- APP -->
   <div id="appBox" style="display:none;">
-    <div class="card">
-      <button class="primary" onclick="submitForm()">הרשמה לשעות שנבחרו</button>
-    </div>
-
     <div id="days"></div>
   </div>
 
+</div>
+
+<!-- Sticky register button -->
+<div class="sticky-footer" id="stickyFooter" style="display:none;">
+  <button class="register-btn" id="registerBtn" onclick="submitForm()" disabled>
+    בחר שעות להרשמה
+  </button>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
@@ -125,10 +163,8 @@ async function loadHolidays(year = 2026) {
   const res = await fetch(
     `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=off&mod=on&nx=off&mf=on&i=on`
   );
-
   const data = await res.json();
   holidaysMap = {};
-
   (data.items || []).forEach(item => {
     if (item.category === "holiday") {
       const dateKey = item.date.substring(0, 10);
@@ -137,16 +173,27 @@ async function loadHolidays(year = 2026) {
   });
 }
 
+// ================= UPDATE BUTTON =================
+function updateRegisterBtn() {
+  const btn = document.getElementById("registerBtn");
+  if (selected.length === 0) {
+    btn.disabled = true;
+    btn.textContent = "בחר שעות להרשמה";
+  } else {
+    btn.disabled = false;
+    btn.textContent = `✅ הרשמה ל־${selected.length} סלוט${selected.length > 1 ? "ים" : ""}`;
+  }
+}
+
 // ================= SESSION =================
 async function checkSession() {
   const { data: { session } } = await client.auth.getSession();
 
   if (session) {
     currentUserId = session.user.id;
-
     document.getElementById("authBox").style.display = "none";
     document.getElementById("appBox").style.display = "block";
-
+    document.getElementById("stickyFooter").style.display = "flex";
     fetchRegistrations();
   }
 }
@@ -199,18 +246,18 @@ function renderRegistrations(data) {
 
     times.forEach(time => {
       const bookings = (grouped[date] || []).filter(x => x.time === time);
+      const key = `${date}|${time}`;
+      const isSelected = selected.includes(key);
 
       html += `
-        <div class="slot" onclick="toggleSlot('${date}','${time}', this)">
+        <div class="slot ${isSelected ? "selected" : ""}" onclick="toggleSlot('${date}','${time}', this)">
           <b>${time}</b>
-
           <div style="font-size:13px;margin-top:5px">
             ${
               bookings.length
                 ? bookings.map(b => `
                     <div class="booking-row">
                       <span>👤 ${b.name}</span>
-
                       ${
                         b.user_id === currentUserId
                           ? `<button class="trash-btn"
@@ -244,6 +291,8 @@ function toggleSlot(date, time, el) {
     selected.push(key);
     el.classList.add("selected");
   }
+
+  updateRegisterBtn();
 }
 
 // ================= DELETE =================
@@ -282,8 +331,11 @@ async function login() {
 async function submitForm() {
   const { data: { session } } = await client.auth.getSession();
   if (!session) return alert("צריך להתחבר");
-
   if (!selected.length) return alert("יש לבחור לפחות שעה אחת");
+
+  const btn = document.getElementById("registerBtn");
+  btn.disabled = true;
+  btn.textContent = "שולח...";
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
@@ -297,9 +349,14 @@ async function submitForm() {
 
   const data = await res.json();
 
-  if (!res.ok) return alert(data.error);
+  if (!res.ok) {
+    alert(data.error);
+    updateRegisterBtn();
+    return;
+  }
 
   selected = [];
+  updateRegisterBtn();
   fetchRegistrations();
 }
 
