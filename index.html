@@ -92,8 +92,7 @@ button {
   <!-- APP -->
   <div id="appBox" style="display:none;">
     <div class="card">
-      <input id="name" placeholder="שם מלא">
-      <button class="primary" onclick="submitForm()">הרשמה</button>
+      <button class="primary" onclick="submitForm()">הרשמה לשעות שנבחרו</button>
     </div>
 
     <div id="days"></div>
@@ -132,7 +131,8 @@ async function loadHolidays(year = 2026) {
 
   (data.items || []).forEach(item => {
     if (item.category === "holiday") {
-      holidaysMap[item.date] = item.hebrew || item.title;
+      const dateKey = item.date.substring(0, 10);
+      holidaysMap[dateKey] = item.hebrew || item.title;
     }
   });
 }
@@ -280,11 +280,10 @@ async function login() {
 
 // ================= SUBMIT =================
 async function submitForm() {
-  const name = document.getElementById("name").value;
-
   const { data: { session } } = await client.auth.getSession();
-
   if (!session) return alert("צריך להתחבר");
+
+  if (!selected.length) return alert("יש לבחור לפחות שעה אחת");
 
   const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
     method: "POST",
@@ -293,10 +292,7 @@ async function submitForm() {
       apikey: SUPABASE_ANON_KEY,
       Authorization: `Bearer ${session.access_token}`,
     },
-    body: JSON.stringify({
-      name,
-      slots: selected
-    })
+    body: JSON.stringify({ slots: selected })
   });
 
   const data = await res.json();
