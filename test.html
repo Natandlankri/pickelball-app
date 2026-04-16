@@ -378,18 +378,33 @@ function renderSummaryTable(data, dates) {
   const summaryTable = document.getElementById("summaryTable");
   summaryCard.style.display = "block";
 
-  let html = '<table class="summary-table"><thead><tr><th class="time-col">שעה</th>';
+  // Sort dates chronologically
+  const sortedDates = [...dates].sort().reverse();
 
-  dates.forEach((d, i) => {
-    const dayIdx = new Date(d).getDay(); // 0=Sun
-    const letters = ["א","ב","ג","ד","ה","ו","ש"];
+  const hebrewDayNames = ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
+  const letters = ["א","ב","ג","ד","ה","ו","ש"];
+
+  let html = '<table class="summary-table"><thead>';
+
+  // Row 1: day name (שני, שלישי...)
+  html += '<tr><th class="time-col"></th>';
+  sortedDates.forEach(d => {
+    const dayIdx = new Date(d).getDay();
+    html += `<th style="font-size:11px;color:#e2e8f0;font-weight:bold;padding-bottom:2px">${hebrewDayNames[dayIdx]}</th>`;
+  });
+  html += '</tr>';
+
+  // Row 2: letter + date
+  html += '<tr><th class="time-col">שעה</th>';
+  sortedDates.forEach(d => {
+    const dayIdx = new Date(d).getDay();
     html += `<th>${letters[dayIdx]}<br><span style="font-size:10px;color:#64748b">${d.slice(5)}</span></th>`;
   });
-  html += "</tr></thead><tbody>";
+  html += '</tr></thead><tbody>';
 
   times.forEach(time => {
     html += `<tr><td class="time-label">${time}</td>`;
-    dates.forEach(date => {
+    sortedDates.forEach(date => {
       const count = grouped[date + "|" + time] || 0;
       if (count === 0) {
         html += `<td class="cell-empty">—</td>`;
