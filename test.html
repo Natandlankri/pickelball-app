@@ -61,6 +61,43 @@ button {
   background: #22c55e;
 }
 
+/* Slot header row: time + count badge on left */
+.slot-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.slot-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Player count badge */
+.count-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  font-weight: bold;
+  background: rgba(0,0,0,0.25);
+  border-radius: 20px;
+  padding: 2px 10px;
+  color: #cbd5e1;
+}
+
+/* "יש משחק" badge – shown when 4+ registered */
+.game-on-badge {
+  font-size: 12px;
+  font-weight: bold;
+  background: #fbbf24;
+  color: #1e293b;
+  border-radius: 20px;
+  padding: 2px 10px;
+  white-space: nowrap;
+}
+
 .booking-row {
   display: flex;
   justify-content: space-between;
@@ -246,13 +283,24 @@ function renderRegistrations(data) {
 
     times.forEach(time => {
       const bookings = (grouped[date] || []).filter(x => x.time === time);
+      const count = bookings.length;
+      const gameOn = count >= 4;
       const key = `${date}|${time}`;
       const isSelected = selected.includes(key);
 
+      // Count badge label
+      const countLabel = count === 0 ? "0 רשומים" : count === 1 ? "1 רשום" : `${count} רשומים`;
+
       html += `
         <div class="slot ${isSelected ? "selected" : ""}" onclick="toggleSlot('${date}','${time}', this)">
-          <b>${time}</b>
-          <div style="font-size:13px;margin-top:5px">
+          <div class="slot-header">
+            <b>${time}</b>
+            <div class="slot-meta">
+              ${gameOn ? `<span class="game-on-badge">🏓 יש משחק!</span>` : ""}
+              <span class="count-badge">👥 ${countLabel}</span>
+            </div>
+          </div>
+          <div style="font-size:13px;margin-top:8px">
             ${
               bookings.length
                 ? bookings.map(b => `
@@ -268,7 +316,7 @@ function renderRegistrations(data) {
                       }
                     </div>
                   `).join("")
-                : "זמין"
+                : "<span style='color:#94a3b8'>זמין</span>"
             }
           </div>
         </div>
