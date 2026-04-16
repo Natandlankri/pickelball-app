@@ -379,12 +379,12 @@ function renderSummaryTable(data, dates) {
   summaryCard.style.display = "block";
 
   // Sort dates chronologically
-  const sortedDates = [...dates].sort().reverse();
+  const sortedDates = [...dates].sort();
 
   const hebrewDayNames = ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
   const letters = ["א","ב","ג","ד","ה","ו","ש"];
 
-  let html = '<table class="summary-table"><thead>';
+  let html = '<table class="summary-table" dir="rtl"><thead>';
 
   // Row 1: day name (שני, שלישי...)
   html += '<tr><th class="time-col"></th>';
