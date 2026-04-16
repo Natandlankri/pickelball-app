@@ -98,6 +98,40 @@ button {
   white-space: nowrap;
 }
 
+/* Day header above each card */
+.day-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 20px 0 6px 0;
+  padding: 0 4px;
+}
+
+.day-header-title {
+  font-size: 15px;
+  font-weight: bold;
+  color: #e2e8f0;
+}
+
+.day-header-date {
+  font-size: 12px;
+  color: #64748b;
+  margin-top: 2px;
+}
+
+.day-header-badge {
+  font-size: 12px;
+  font-weight: bold;
+  background: #fbbf24;
+  color: #1e293b;
+  border-radius: 20px;
+  padding: 3px 12px;
+}
+
+.day-header-first {
+  margin-top: 4px;
+}
+
 .booking-row {
   display: flex;
   justify-content: space-between;
@@ -146,6 +180,79 @@ button {
   color: #64748b;
   cursor: not-allowed;
 }
+
+/* Summary table */
+.summary-card {
+  background: #1e293b;
+  padding: 16px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.summary-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #94a3b8;
+  font-weight: normal;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: center;
+}
+
+.summary-table th {
+  color: #94a3b8;
+  font-weight: normal;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.summary-table th.time-col {
+  text-align: right;
+  color: #cbd5e1;
+  font-weight: bold;
+}
+
+.summary-table td {
+  padding: 6px 4px;
+  border-radius: 6px;
+}
+
+.summary-table td.time-label {
+  text-align: right;
+  color: #94a3b8;
+  font-size: 12px;
+  padding-left: 0;
+  white-space: nowrap;
+}
+
+.cell-empty {
+  color: #475569;
+}
+
+.cell-few {
+  color: #cbd5e1;
+  font-weight: bold;
+}
+
+.cell-game {
+  background: #fbbf24;
+  color: #1e293b;
+  font-weight: bold;
+  border-radius: 6px;
+  position: relative;
+}
+
+.cell-game::after {
+  content: "🏓";
+  font-size: 10px;
+  display: block;
+  line-height: 1;
+}
 </style>
 </head>
 
@@ -163,6 +270,10 @@ button {
 
   <!-- APP -->
   <div id="appBox" style="display:none;">
+    <div class="summary-card" id="summaryCard" style="display:none;">
+      <h3>📊 סיכום הרשמות</h3>
+      <div id="summaryTable"></div>
+    </div>
     <div id="days"></div>
   </div>
 
@@ -251,6 +362,65 @@ async function fetchRegistrations() {
   renderRegistrations(data);
 }
 
+// ================= SUMMARY TABLE =================
+function renderSummaryTable(data, dates) {
+  const times = ["07:30", "17:00"];
+  const hebrewDays = ["א","ב","ג","ד","ה","ו","ש"];
+
+  const grouped = {};
+  data.forEach(r => {
+    const key = r.date + "|" + r.time;
+    if (!grouped[key]) grouped[key] = 0;
+    grouped[key]++;
+  });
+
+  const summaryCard = document.getElementById("summaryCard");
+  const summaryTable = document.getElementById("summaryTable");
+  summaryCard.style.display = "block";
+
+  // Sort dates chronologically
+  const sortedDates = [...dates].sort();
+
+  const hebrewDayNames = ["ראשון","שני","שלישי","רביעי","חמישי","שישי","שבת"];
+  const letters = ["א","ב","ג","ד","ה","ו","ש"];
+
+  let html = '<table class="summary-table" dir="rtl"><thead>';
+
+  // Row 1: day name (שני, שלישי...)
+  html += '<tr><th class="time-col"></th>';
+  sortedDates.forEach(d => {
+    const dayIdx = new Date(d).getDay();
+    html += `<th style="font-size:11px;color:#e2e8f0;font-weight:bold;padding-bottom:2px">${hebrewDayNames[dayIdx]}</th>`;
+  });
+  html += '</tr>';
+
+  // Row 2: letter + date
+  html += '<tr><th class="time-col">שעה</th>';
+  sortedDates.forEach(d => {
+    const dayIdx = new Date(d).getDay();
+    html += `<th>${letters[dayIdx]}<br><span style="font-size:10px;color:#64748b">${d.slice(5)}</span></th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  times.forEach(time => {
+    html += `<tr><td class="time-label">${time}</td>`;
+    sortedDates.forEach(date => {
+      const count = grouped[date + "|" + time] || 0;
+      if (count === 0) {
+        html += `<td class="cell-empty">—</td>`;
+      } else if (count >= 4) {
+        html += `<td class="cell-game">${count}</td>`;
+      } else {
+        html += `<td class="cell-few">${count}</td>`;
+      }
+    });
+    html += "</tr>";
+  });
+
+  html += "</tbody></table>";
+  summaryTable.innerHTML = html;
+}
+
 // ================= RENDER =================
 function renderRegistrations(data) {
   const container = document.getElementById("days");
@@ -264,6 +434,15 @@ function renderRegistrations(data) {
     grouped[r.date].push(r);
   });
 
+  // Build ordered date list for next 7 days
+  const upcomingDates = [];
+  for (let i = 1; i <= 7; i++) {
+    let tmp = new Date();
+    tmp.setDate(tmp.getDate() + i);
+    upcomingDates.push(formatDateLocal(tmp));
+  }
+  renderSummaryTable(data, upcomingDates);
+
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
     d.setDate(d.getDate() + i);
@@ -272,14 +451,26 @@ function renderRegistrations(data) {
     const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
     const holiday = holidaysMap[date];
 
+    // Day header (outside card)
+    const dayTimes = ["07:30", "17:00"];
+    const dayTotal = dayTimes.reduce((sum, t) => sum + (grouped[date] || []).filter(x => x.time === t).length, 0);
+    const dayGameOn = dayTimes.some(t => (grouped[date] || []).filter(x => x.time === t).length >= 4);
+
+    const header = document.createElement("div");
+    header.className = "day-header" + (i === 1 ? " day-header-first" : "");
+    header.innerHTML = `
+      <div>
+        <div class="day-header-title">${hebrewDay}</div>
+        <div class="day-header-date">${date}${holiday ? ` · 📅 ${holiday}` : ""}</div>
+      </div>
+      ${dayGameOn ? `<span class="day-header-badge">🏓 יש משחק!</span>` : ""}
+    `;
+    container.appendChild(header);
+
     const card = document.createElement("div");
     card.className = "card";
 
-    let html = `
-      <b>${hebrewDay} - ${date}</b>
-      ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
-      <br><br>
-    `;
+    let html = ``;
 
     times.forEach(time => {
       const bookings = (grouped[date] || []).filter(x => x.time === time);
