@@ -146,6 +146,79 @@ button {
   color: #64748b;
   cursor: not-allowed;
 }
+
+/* Summary table */
+.summary-card {
+  background: #1e293b;
+  padding: 16px;
+  border-radius: 16px;
+  margin-bottom: 20px;
+  overflow-x: auto;
+}
+
+.summary-card h3 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  color: #94a3b8;
+  font-weight: normal;
+}
+
+.summary-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  text-align: center;
+}
+
+.summary-table th {
+  color: #94a3b8;
+  font-weight: normal;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.summary-table th.time-col {
+  text-align: right;
+  color: #cbd5e1;
+  font-weight: bold;
+}
+
+.summary-table td {
+  padding: 6px 4px;
+  border-radius: 6px;
+}
+
+.summary-table td.time-label {
+  text-align: right;
+  color: #94a3b8;
+  font-size: 12px;
+  padding-left: 0;
+  white-space: nowrap;
+}
+
+.cell-empty {
+  color: #475569;
+}
+
+.cell-few {
+  color: #cbd5e1;
+  font-weight: bold;
+}
+
+.cell-game {
+  background: #fbbf24;
+  color: #1e293b;
+  font-weight: bold;
+  border-radius: 6px;
+  position: relative;
+}
+
+.cell-game::after {
+  content: "🏓";
+  font-size: 10px;
+  display: block;
+  line-height: 1;
+}
 </style>
 </head>
 
@@ -163,6 +236,10 @@ button {
 
   <!-- APP -->
   <div id="appBox" style="display:none;">
+    <div class="summary-card" id="summaryCard" style="display:none;">
+      <h3>📊 סיכום הרשמות</h3>
+      <div id="summaryTable"></div>
+    </div>
     <div id="days"></div>
   </div>
 
@@ -251,6 +328,50 @@ async function fetchRegistrations() {
   renderRegistrations(data);
 }
 
+// ================= SUMMARY TABLE =================
+function renderSummaryTable(data, dates) {
+  const times = ["07:30", "17:00"];
+  const hebrewDays = ["א","ב","ג","ד","ה","ו","ש"];
+
+  const grouped = {};
+  data.forEach(r => {
+    const key = r.date + "|" + r.time;
+    if (!grouped[key]) grouped[key] = 0;
+    grouped[key]++;
+  });
+
+  const summaryCard = document.getElementById("summaryCard");
+  const summaryTable = document.getElementById("summaryTable");
+  summaryCard.style.display = "block";
+
+  let html = '<table class="summary-table"><thead><tr><th class="time-col">שעה</th>';
+
+  dates.forEach((d, i) => {
+    const dayIdx = new Date(d).getDay(); // 0=Sun
+    const letters = ["א","ב","ג","ד","ה","ו","ש"];
+    html += `<th>${letters[dayIdx]}<br><span style="font-size:10px;color:#64748b">${d.slice(5)}</span></th>`;
+  });
+  html += "</tr></thead><tbody>";
+
+  times.forEach(time => {
+    html += `<tr><td class="time-label">${time}</td>`;
+    dates.forEach(date => {
+      const count = grouped[date + "|" + time] || 0;
+      if (count === 0) {
+        html += `<td class="cell-empty">—</td>`;
+      } else if (count >= 4) {
+        html += `<td class="cell-game">${count}</td>`;
+      } else {
+        html += `<td class="cell-few">${count}</td>`;
+      }
+    });
+    html += "</tr>";
+  });
+
+  html += "</tbody></table>";
+  summaryTable.innerHTML = html;
+}
+
 // ================= RENDER =================
 function renderRegistrations(data) {
   const container = document.getElementById("days");
@@ -263,6 +384,15 @@ function renderRegistrations(data) {
     if (!grouped[r.date]) grouped[r.date] = [];
     grouped[r.date].push(r);
   });
+
+  // Build ordered date list for next 7 days
+  const upcomingDates = [];
+  for (let i = 1; i <= 7; i++) {
+    let tmp = new Date();
+    tmp.setDate(tmp.getDate() + i);
+    upcomingDates.push(formatDateLocal(tmp));
+  }
+  renderSummaryTable(data, upcomingDates);
 
   for (let i = 1; i <= 7; i++) {
     let d = new Date();
