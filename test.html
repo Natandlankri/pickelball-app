@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="he">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>פיקלבול בת חפר 🎾</title>
+
+<style>
+body {
+  font-family: Arial;
+  background: #0f172a;
+  color: white;
+  margin: 0;
+}
+
+.container {
+  max-width: 500px;
+  margin: auto;
+  padding: 20px;
+}
+
+.card {
+  background: #1e293b;
+  padding: 20px;
+  border-radius: 16px;
+  margin-bottom: 15px;
+}
+
+input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: none;
+}
+
+button {
+  width: 100%;
+  margin-top: 10px;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+.login { background: #6366f1; color: white; }
+.primary { background: #38bdf8; }
+
+.slot {
+  background: #475569;
+  padding: 10px;
+  margin-top: 6px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.slot.selected {
+  background: #22c55e;
+}
+
+.booking-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+}
+
+.trash-btn {
+  background: transparent;
+  border: none;
+  color: #ef4444;
+  cursor: pointer;
+  font-size: 16px;
+}
+</style>
+</head>
+
+<body dir="rtl">
+
+<div class="container">
+
+  <h1>🎾 פיקלבול בת חפר</h1>
+
+  <!-- AUTH -->
+  <div class="card" id="authBox">
+    <input id="email" placeholder="אימייל להתחברות">
+    <button class="login" onclick="login()">🔐 התחבר</button>
+  </div>
+
+  <!-- APP -->
+  <div id="appBox" style="display:none;">
+    <div class="card">
+      <input id="name" placeholder="שם מלא">
+      <button class="primary" onclick="submitForm()">הרשמה</button>
+    </div>
+
+    <div id="days"></div>
+  </div>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+<script>
+const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InN2YXN2Ym9vZWl4d2JmZ3l0ZW1sIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzU4ODE3MDAsImV4cCI6MjA5MTQ1NzcwMH0.SseXrAMUs8hgIxT0jOccH8svqaPR7lgOAWNcYvDvdo0";
+
+const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+let selected = [];
+let holidaysMap = {};
+let currentUserId = null;
+
+// ================= DATE =================
+function formatDateLocal(d) {
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+// ================= HOLIDAYS =================
+async function loadHolidays(year = 2026) {
+  const res = await fetch(
+    `https://www.hebcal.com/hebcal?v=1&cfg=json&year=${year}&lg=he&maj=on&min=off&mod=off&nx=off`
+  );
+
+  const data = await res.json();
+  holidaysMap = {};
+
+  (data.items || []).forEach(item => {
+    if (item.category === "holiday") {
+      const dateKey = item.date.substring(0, 10); // ✅ trim to YYYY-MM-DD
+      holidaysMap[dateKey] = item.hebrew || item.title;
+    }
+  });
+}
+
+// ================= SESSION =================
+async function checkSession() {
+  const { data: { session } } = await client.auth.getSession();
+
+  if (session) {
+    currentUserId = session.user.id;
+
+    document.getElementById("authBox").style.display = "none";
+    document.getElementById("appBox").style.display = "block";
+
+    fetchRegistrations();
+  }
+}
+
+// ================= FETCH =================
+async function fetchRegistrations() {
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return;
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    headers: {
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    }
+  });
+
+  const data = await res.json();
+  renderRegistrations(data);
+}
+
+// ================= RENDER =================
+function renderRegistrations(data) {
+  const container = document.getElementById("days");
+  container.innerHTML = "";
+
+  const times = ["07:30", "17:00"];
+
+  const grouped = {};
+  data.forEach(r => {
+    if (!grouped[r.date]) grouped[r.date] = [];
+    grouped[r.date].push(r);
+  });
+
+  for (let i = 1; i <= 7; i++) {
+    let d = new Date();
+    d.setDate(d.getDate() + i);
+
+    let date = formatDateLocal(d);
+    const hebrewDay = d.toLocaleDateString("he-IL", { weekday: "long" });
+    const holiday = holidaysMap[date];
+
+    const card = document.createElement("div");
+    card.className = "card";
+
+    let html = `
+      <b>${hebrewDay} - ${date}</b>
+      ${holiday ? `<div style="color:#fbbf24">📅 ${holiday}</div>` : ""}
+      <br><br>
+    `;
+
+    times.forEach(time => {
+      const bookings = (grouped[date] || []).filter(x => x.time === time);
+
+      html += `
+        <div class="slot" onclick="toggleSlot('${date}','${time}', this)">
+          <b>${time}</b>
+
+          <div style="font-size:13px;margin-top:5px">
+            ${
+              bookings.length
+                ? bookings.map(b => `
+                    <div class="booking-row">
+                      <span>👤 ${b.name}</span>
+
+                      ${
+                        b.user_id === currentUserId
+                          ? `<button class="trash-btn"
+                              onclick="event.stopPropagation(); deleteRegistration('${b.id}')">
+                              🗑️
+                             </button>`
+                          : ""
+                      }
+                    </div>
+                  `).join("")
+                : "זמין"
+            }
+          </div>
+        </div>
+      `;
+    });
+
+    card.innerHTML = html;
+    container.appendChild(card);
+  }
+}
+
+// ================= SLOT =================
+function toggleSlot(date, time, el) {
+  const key = `${date}|${time}`;
+
+  if (selected.includes(key)) {
+    selected = selected.filter(x => x !== key);
+    el.classList.remove("selected");
+  } else {
+    selected.push(key);
+    el.classList.add("selected");
+  }
+}
+
+// ================= DELETE =================
+async function deleteRegistration(id) {
+  const { data: { session } } = await client.auth.getSession();
+
+  await fetch(`${SUPABASE_URL}/functions/v1/delete-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({ id })
+  });
+
+  fetchRegistrations();
+}
+
+// ================= LOGIN =================
+async function login() {
+  const email = document.getElementById("email").value;
+
+  const { error } = await client.auth.signInWithOtp({
+    email,
+    options: {
+      emailRedirectTo: window.location.href
+    }
+  });
+
+  if (error) alert(error.message);
+  else alert("נשלח מייל 📧");
+}
+
+// ================= SUBMIT =================
+async function submitForm() {
+  const name = document.getElementById("name").value;
+
+  const { data: { session } } = await client.auth.getSession();
+
+  if (!session) return alert("צריך להתחבר");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/create-registration`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      apikey: SUPABASE_ANON_KEY,
+      Authorization: `Bearer ${session.access_token}`,
+    },
+    body: JSON.stringify({
+      name,
+      slots: selected
+    })
+  });
+
+  const data = await res.json();
+
+  if (!res.ok) return alert(data.error);
+
+  selected = [];
+  fetchRegistrations();
+}
+
+// ================= INIT =================
+window.addEventListener("load", async () => {
+  await loadHolidays(2026);
+  checkSession();
+});
+
+client.auth.onAuthStateChange(() => {
+  checkSession();
+});
+</script>
+
+</body>
+</html>
