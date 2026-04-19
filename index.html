@@ -132,6 +132,62 @@ button {
   margin-top: 4px;
 }
 
+/* Weather strip under day header */
+.weather-strip {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+  font-size: 12px;
+  color: #94a3b8;
+  padding: 8px 4px 10px 4px;
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+
+.weather-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #1e293b;
+  border-radius: 10px;
+  padding: 8px 12px;
+  flex: 1;
+}
+
+.weather-pill .w-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.weather-pill .w-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.weather-pill .w-temp {
+  color: #e2e8f0;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.weather-pill .w-wind-val {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 12px;
+  color: #94a3b8;
+}
+
+.weather-pill .w-wind-val.strong {
+  color: #fbbf24;
+  font-weight: bold;
+}
+
+.weather-strip .w-icon {
+  font-size: 14px;
+}
+
 .booking-row {
   display: flex;
   justify-content: space-between;
@@ -296,6 +352,7 @@ const client = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 let selected = [];
 let holidaysMap = {};
+let weatherMap = {}; // keyed by date → {tempMorning, tempEvening, windMorning, windEvening}
 let currentUserId = null;
 
 // ================= DATE =================
@@ -319,6 +376,40 @@ async function loadHolidays(year = 2026) {
       holidaysMap[dateKey] = item.hebrew || item.title;
     }
   });
+}
+
+// ================= WEATHER =================
+async function loadWeather() {
+  // Beit Hefer coordinates
+  const lat = 32.37;
+  const lon = 34.92;
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,windspeed_10m&forecast_days=8&timezone=Asia%2FJerusalem`;
+  try {
+    const res = await fetch(url);
+    const data = await res.json();
+    const times = data.hourly.time;      // "2026-04-20T07:00"
+    const temps = data.hourly.temperature_2m;
+    const winds = data.hourly.windspeed_10m;
+
+    weatherMap = {};
+    times.forEach((t, i) => {
+      const date = t.slice(0, 10);
+      const hour = parseInt(t.slice(11, 13));
+      if (!weatherMap[date]) weatherMap[date] = {};
+      // capture closest hours to our slots
+      if (hour === 7)  { weatherMap[date].tempMorning = Math.round(temps[i]); weatherMap[date].windMorning = Math.round(winds[i]); }
+      if (hour === 17) { weatherMap[date].tempEvening = Math.round(temps[i]); weatherMap[date].windEvening = Math.round(winds[i]); }
+    });
+  } catch(e) {
+    console.warn("Weather load failed", e);
+  }
+}
+
+function weatherIcon(temp) {
+  if (temp >= 32) return "🌡️";
+  if (temp >= 25) return "☀️";
+  if (temp >= 18) return "⛅";
+  return "🌥️";
 }
 
 // ================= UPDATE BUTTON =================
@@ -467,6 +558,36 @@ function renderRegistrations(data) {
     `;
     container.appendChild(header);
 
+    // Weather strip
+    const wx = weatherMap[date];
+    if (wx) {
+      const strip = document.createElement("div");
+      strip.className = "weather-strip";
+      const avgTemp = Math.round(((wx.tempMorning || 0) + (wx.tempEvening || 0)) / 2);
+      const maxWind = Math.max(wx.windMorning || 0, wx.windEvening || 0);
+      const windClass = maxWind >= 30 ? "w-wind strong" : "w-wind";
+      const windWarning = maxWind >= 30 ? " ⚠️" : "";
+      const wMornStrong = (wx.windMorning || 0) >= 30;
+      const wEveStrong  = (wx.windEvening || 0) >= 30;
+      strip.innerHTML = `
+        <div class="weather-pill">
+          <span class="w-label">בוקר ☀️</span>
+          <div class="w-row">
+            <span class="w-temp">${wx.tempMorning ?? "—"}°C</span>
+            <span class="w-wind-val ${wMornStrong ? "strong" : ""}">🌬️ ${wx.windMorning ?? "—"} קמ"ש${wMornStrong ? " ⚠️" : ""}</span>
+          </div>
+        </div>
+        <div class="weather-pill">
+          <span class="w-label">ערב 🌙</span>
+          <div class="w-row">
+            <span class="w-temp">${wx.tempEvening ?? "—"}°C</span>
+            <span class="w-wind-val ${wEveStrong ? "strong" : ""}">🌬️ ${wx.windEvening ?? "—"} קמ"ש${wEveStrong ? " ⚠️" : ""}</span>
+          </div>
+        </div>
+      `;
+      container.appendChild(strip);
+    }
+
     const card = document.createElement("div");
     card.className = "card";
 
@@ -601,7 +722,7 @@ async function submitForm() {
 
 // ================= INIT =================
 window.addEventListener("load", async () => {
-  await loadHolidays(2026);
+  await Promise.all([loadHolidays(2026), loadWeather()]);
   checkSession();
 });
 
