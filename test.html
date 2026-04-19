@@ -135,28 +135,51 @@ button {
 /* Weather strip under day header */
 .weather-strip {
   display: flex;
-  gap: 14px;
-  align-items: center;
+  gap: 6px;
+  align-items: stretch;
   font-size: 12px;
   color: #94a3b8;
-  padding: 0 4px;
-  margin-top: -10px;
-  margin-bottom: 8px;
+  padding: 8px 4px 10px 4px;
+  margin-top: 0;
+  margin-bottom: 4px;
 }
 
-.weather-strip .w-temp {
+.weather-pill {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  background: #1e293b;
+  border-radius: 10px;
+  padding: 8px 12px;
+  flex: 1;
+}
+
+.weather-pill .w-label {
+  font-size: 11px;
+  color: #64748b;
+}
+
+.weather-pill .w-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.weather-pill .w-temp {
   color: #e2e8f0;
   font-weight: bold;
-  font-size: 13px;
+  font-size: 14px;
 }
 
-.weather-strip .w-wind {
+.weather-pill .w-wind-val {
   display: flex;
   align-items: center;
   gap: 3px;
+  font-size: 12px;
+  color: #94a3b8;
 }
 
-.weather-strip .w-wind.strong {
+.weather-pill .w-wind-val.strong {
   color: #fbbf24;
   font-weight: bold;
 }
@@ -544,11 +567,23 @@ function renderRegistrations(data) {
       const maxWind = Math.max(wx.windMorning || 0, wx.windEvening || 0);
       const windClass = maxWind >= 30 ? "w-wind strong" : "w-wind";
       const windWarning = maxWind >= 30 ? " ⚠️" : "";
+      const wMornStrong = (wx.windMorning || 0) >= 30;
+      const wEveStrong  = (wx.windEvening || 0) >= 30;
       strip.innerHTML = `
-        <span class="w-icon">${weatherIcon(avgTemp)}</span>
-        <span>בוקר: <span class="w-temp">${wx.tempMorning ?? "—"}°</span> 💨 <span class="${maxWind >= 30 ? "w-wind strong" : "w-wind"}">${wx.windMorning ?? "—"} קמ"ש${wx.windMorning >= 30 ? " ⚠️" : ""}</span></span>
-        <span>·</span>
-        <span>ערב: <span class="w-temp">${wx.tempEvening ?? "—"}°</span> 💨 <span class="${wx.windEvening >= 30 ? "w-wind strong" : "w-wind"}">${wx.windEvening ?? "—"} קמ"ש${wx.windEvening >= 30 ? " ⚠️" : ""}</span></span>
+        <div class="weather-pill">
+          <span class="w-label">בוקר ☀️</span>
+          <div class="w-row">
+            <span class="w-temp">${wx.tempMorning ?? "—"}°C</span>
+            <span class="w-wind-val ${wMornStrong ? "strong" : ""}">🌬️ ${wx.windMorning ?? "—"} קמ"ש${wMornStrong ? " ⚠️" : ""}</span>
+          </div>
+        </div>
+        <div class="weather-pill">
+          <span class="w-label">ערב 🌆</span>
+          <div class="w-row">
+            <span class="w-temp">${wx.tempEvening ?? "—"}°C</span>
+            <span class="w-wind-val ${wEveStrong ? "strong" : ""}">🌬️ ${wx.windEvening ?? "—"} קמ"ש${wEveStrong ? " ⚠️" : ""}</span>
+          </div>
+        </div>
       `;
       container.appendChild(strip);
     }
