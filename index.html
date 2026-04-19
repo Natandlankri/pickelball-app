@@ -382,7 +382,7 @@ async function loadHolidays(year = 2026) {
 async function loadWeather() {
   // Beit Hefer coordinates
   const lat = 32.37;
-  const lon = 34.92;
+  const lon = 35.01;
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&hourly=temperature_2m,windspeed_10m&forecast_days=8&timezone=Asia%2FJerusalem`;
   try {
     const res = await fetch(url);
