@@ -455,7 +455,7 @@ async function fetchRegistrations() {
 
 // ================= SUMMARY TABLE =================
 function renderSummaryTable(data, dates) {
-  const times = ["07:30", "17:00"];
+  const times = ["07:00", "17:00"];
   const hebrewDays = ["א","ב","ג","ד","ה","ו","ש"];
 
   const grouped = {};
@@ -517,7 +517,7 @@ function renderRegistrations(data) {
   const container = document.getElementById("days");
   container.innerHTML = "";
 
-  const times = ["07:30", "17:00"];
+  const times = ["07:00", "17:00"];
 
   const grouped = {};
   data.forEach(r => {
@@ -543,7 +543,7 @@ function renderRegistrations(data) {
     const holiday = holidaysMap[date];
 
     // Day header (outside card)
-    const dayTimes = ["07:30", "17:00"];
+    const dayTimes = ["07:00", "17:00"];
     const dayTotal = dayTimes.reduce((sum, t) => sum + (grouped[date] || []).filter(x => x.time === t).length, 0);
     const dayGameOn = dayTimes.some(t => (grouped[date] || []).filter(x => x.time === t).length >= 4);
 
