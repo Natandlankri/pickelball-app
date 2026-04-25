@@ -188,6 +188,131 @@ button {
   font-size: 14px;
 }
 
+/* Share button */
+.share-btn {
+  background: #334155;
+  border: none;
+  color: #94a3b8;
+  font-size: 16px;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  margin: 0;
+  flex-shrink: 0;
+  transition: background 0.15s, color 0.15s;
+}
+.share-btn:hover {
+  background: #38bdf8;
+  color: #0f172a;
+}
+
+/* Share card (hidden, used for screenshot) */
+.share-card-wrap {
+  position: fixed;
+  left: -9999px;
+  top: 0;
+  width: 420px;
+  background: #0f172a;
+  padding: 24px;
+  font-family: Arial, sans-serif;
+  direction: rtl;
+  border-radius: 20px;
+}
+.share-card-title {
+  font-size: 20px;
+  font-weight: bold;
+  color: #e2e8f0;
+  margin-bottom: 4px;
+}
+.share-card-date {
+  font-size: 13px;
+  color: #64748b;
+  margin-bottom: 14px;
+}
+.share-card-holiday {
+  color: #fbbf24;
+  font-size: 13px;
+  margin-bottom: 14px;
+}
+.share-weather {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+.share-weather-pill {
+  flex: 1;
+  background: #1e293b;
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.share-weather-pill .sw-label {
+  font-size: 11px;
+  color: #64748b;
+  margin-bottom: 4px;
+}
+.share-weather-pill .sw-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #e2e8f0;
+  font-weight: bold;
+  font-size: 14px;
+}
+.share-weather-pill .sw-wind {
+  font-size: 12px;
+  color: #94a3b8;
+  font-weight: normal;
+}
+.share-weather-pill .sw-wind.strong {
+  color: #fbbf24;
+  font-weight: bold;
+}
+.share-slot {
+  background: #1e293b;
+  border-radius: 12px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+.share-slot-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.share-slot-time {
+  font-size: 16px;
+  font-weight: bold;
+  color: #e2e8f0;
+}
+.share-game-badge {
+  background: #fbbf24;
+  color: #1e293b;
+  font-size: 11px;
+  font-weight: bold;
+  border-radius: 20px;
+  padding: 2px 10px;
+}
+.share-player {
+  font-size: 13px;
+  color: #cbd5e1;
+  padding: 3px 0;
+}
+.share-empty {
+  font-size: 13px;
+  color: #475569;
+}
+.share-footer {
+  margin-top: 16px;
+  font-size: 11px;
+  color: #334155;
+  text-align: center;
+}
+
 .booking-row {
   display: flex;
   justify-content: space-between;
@@ -343,6 +468,7 @@ button {
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
 
 <script>
 const SUPABASE_URL = "https://svasvbooeixwbfgyteml.supabase.co";
@@ -550,11 +676,16 @@ function renderRegistrations(data) {
     const header = document.createElement("div");
     header.className = "day-header" + (i === 1 ? " day-header-first" : "");
     header.innerHTML = `
-      <div>
-        <div class="day-header-title">${hebrewDay}</div>
-        <div class="day-header-date">${date}${holiday ? ` · 📅 ${holiday}` : ""}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex:1;justify-content:space-between">
+        <div>
+          <div class="day-header-title">${hebrewDay}</div>
+          <div class="day-header-date">${date}${holiday ? ` · 📅 ${holiday}` : ""}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:8px">
+          ${dayGameOn ? `<span class="day-header-badge">🏓 יש משחק!</span>` : ""}
+          <button class="share-btn" onclick="shareDay('${date}','${hebrewDay}')" title="שתף יום">📤</button>
+        </div>
       </div>
-      ${dayGameOn ? `<span class="day-header-badge">🏓 יש משחק!</span>` : ""}
     `;
     container.appendChild(header);
 
@@ -718,6 +849,111 @@ async function submitForm() {
   selected = [];
   updateRegisterBtn();
   fetchRegistrations();
+}
+
+// ================= SHARE =================
+async function shareDay(date, hebrewDay) {
+  // Collect data for this day
+  const times = ["07:00", "17:00"];
+  const wx = weatherMap[date];
+  const holiday = holidaysMap[date];
+
+  // Gather current bookings from DOM is messy — re-use last fetched data
+  // We'll re-fetch to be safe
+  const { data: { session } } = await client.auth.getSession();
+  if (!session) return alert("צריך להתחבר");
+
+  const res = await fetch(`${SUPABASE_URL}/functions/v1/get-registrations`, {
+    headers: { apikey: SUPABASE_ANON_KEY, Authorization: `Bearer ${session.access_token}` }
+  });
+  const allData = await res.json();
+  const dayData = allData.filter(r => r.date === date);
+
+  // Build hidden share card
+  const wrap = document.createElement("div");
+  wrap.className = "share-card-wrap";
+
+  const dayGameOn = times.some(t => dayData.filter(r => r.time === t).length >= 4);
+
+  let html = `
+    <div class="share-card-title">🎾 פיקלבול בת חפר</div>
+    <div class="share-card-date">${hebrewDay} · ${date}</div>
+    ${holiday ? `<div class="share-card-holiday">📅 ${holiday}</div>` : ""}
+  `;
+
+  // Weather
+  if (wx) {
+    const wMornStrong = (wx.windMorning || 0) >= 30;
+    const wEveStrong  = (wx.windEvening || 0) >= 30;
+    html += `
+      <div class="share-weather">
+        <div class="share-weather-pill">
+          <div class="sw-label">בוקר ☀️</div>
+          <div class="sw-row">
+            ${wx.tempMorning ?? "—"}°C
+            <span class="sw-wind ${wMornStrong ? "strong" : ""}">🌬️ ${wx.windMorning ?? "—"} קמ"ש${wMornStrong ? " ⚠️" : ""}</span>
+          </div>
+        </div>
+        <div class="share-weather-pill">
+          <div class="sw-label">ערב 🌙</div>
+          <div class="sw-row">
+            ${wx.tempEvening ?? "—"}°C
+            <span class="sw-wind ${wEveStrong ? "strong" : ""}">🌬️ ${wx.windEvening ?? "—"} קמ"ש${wEveStrong ? " ⚠️" : ""}</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // Slots
+  times.forEach(time => {
+    const bookings = dayData.filter(r => r.time === time);
+    const gameOn = bookings.length >= 4;
+    html += `
+      <div class="share-slot">
+        <div class="share-slot-header">
+          <span class="share-slot-time">${time}</span>
+          ${gameOn ? `<span class="share-game-badge">🏓 יש משחק!</span>` : `<span style="font-size:12px;color:#64748b">${bookings.length} רשומים</span>`}
+        </div>
+        ${bookings.length
+          ? bookings.map(b => `<div class="share-player">👤 ${b.name}</div>`).join("")
+          : `<div class="share-empty">אין רשומים עדיין</div>`}
+      </div>
+    `;
+  });
+
+  html += `<div class="share-footer">פיקלבול בת חפר 🎾</div>`;
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap);
+
+  try {
+    const canvas = await html2canvas(wrap, { backgroundColor: "#0f172a", scale: 2, useCORS: true });
+    document.body.removeChild(wrap);
+
+    canvas.toBlob(async blob => {
+      const file = new File([blob], `pickleball-${date}.png`, { type: "image/png" });
+
+      if (navigator.share && navigator.canShare({ files: [file] })) {
+        // Native share sheet (mobile) — WhatsApp, email, etc.
+        await navigator.share({
+          title: `פיקלבול בת חפר · ${hebrewDay}`,
+          text: `שחקני פיקלבול ל${hebrewDay} ${date} 🎾`,
+          files: [file]
+        });
+      } else {
+        // Fallback: download the image
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `pickleball-${date}.png`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    }, "image/png");
+  } catch(e) {
+    if (document.body.contains(wrap)) document.body.removeChild(wrap);
+    console.error(e);
+  }
 }
 
 // ================= INIT =================
